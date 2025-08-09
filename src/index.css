@@ -1,0 +1,14 @@
+/* Import the Google Font */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+/* Apply Tailwind base styles */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Apply global styles and the new theme colors */
+@layer base {
+  body {
+    @apply bg-primary text-text-primary font-sans antialiased;
+  }
+}
