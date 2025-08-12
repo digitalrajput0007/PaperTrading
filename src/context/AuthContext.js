@@ -5,7 +5,11 @@ import {
     signInWithEmailAndPassword, 
     signOut, 
     sendEmailVerification,
-    onAuthStateChanged 
+    sendPasswordResetEmail, // <-- Import this
+    onAuthStateChanged,
+    EmailAuthProvider,
+    reauthenticateWithCredential,
+    updatePassword
 } from "firebase/auth";
 import { doc, setDoc, getDoc, updateDoc } from "firebase/firestore";
 import toast from 'react-hot-toast';
@@ -18,16 +22,18 @@ export function useAuth() {
 
 export function AuthProvider({ children }) {
     const [currentUser, setCurrentUser] = useState(null);
-    const [userData, setUserData] = useState(null); // State to hold Firestore user data
+    const [userData, setUserData] = useState(null);
     const [loading, setLoading] = useState(true);
 
-    // This function now accepts all the necessary fields
     async function signup(email, password, firstName, lastName, mobile, gender) {
         try {
             const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-            await sendEmailVerification(userCredential.user);
+            const actionCodeSettings = {
+                url: `${window.location.origin}/action`, // This URL points to your ActionHandlerPage
+                handleCodeInApp: true,
+            };
+            await sendEmailVerification(userCredential.user, actionCodeSettings);
 
-            // Now saves all fields to the user's document
             await setDoc(doc(db, "users", userCredential.user.uid), {
                 uid: userCredential.user.uid,
                 email: email,
@@ -36,7 +42,7 @@ export function AuthProvider({ children }) {
                 mobile: mobile,
                 gender: gender,
                 createdAt: new Date(),
-                photoURL: '' // Initialize photoURL
+                photoURL: ''
             });
             
             toast.success('Verification email sent! Please check your inbox.');
@@ -52,22 +58,44 @@ export function AuthProvider({ children }) {
     }
 
     function logout() {
-        setUserData(null); // Clear user data on logout
+        setUserData(null);
         return signOut(auth);
     }
 
-    // New function to update user details in Firestore
+    // --- NEW: Function for Forgot Password ---
+    function sendPasswordReset(email) {
+        const actionCodeSettings = {
+            url: `${window.location.origin}/action`, // Also points to your ActionHandlerPage
+            handleCodeInApp: true,
+        };
+        return sendPasswordResetEmail(auth, email, actionCodeSettings);
+    }
+
     async function updateUserDetails(uid, data) {
         const userRef = doc(db, "users", uid);
         await updateDoc(userRef, data);
-        setUserData(prev => ({...prev, ...data})); // Also update local state immediately
+        setUserData(prev => ({...prev, ...data}));
     }
+
+    // --- FUNCTIONS FOR IN-APP PASSWORD CHANGE ---
+    // Sensitive operations like this require recent login.
+    // You must call this reauthenticate function before updateUserPassword.
+    function reauthenticate(currentPassword) {
+        const user = auth.currentUser;
+        const cred = EmailAuthProvider.credential(user.email, currentPassword);
+        return reauthenticateWithCredential(user, cred);
+    }
+
+    function updateUserPassword(newPassword) {
+        const user = auth.currentUser;
+        return updatePassword(user, newPassword);
+    }
+    // ------------------------------------
 
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (user) => {
             setCurrentUser(user);
             if (user) {
-                // If user is logged in, fetch their data from Firestore
                 const userDocRef = doc(db, "users", user.uid);
                 const docSnap = await getDoc(userDocRef);
                 if (docSnap.exists()) {
@@ -84,11 +112,14 @@ export function AuthProvider({ children }) {
 
     const value = {
         currentUser,
-        userData, // Provide userData to all components
+        userData,
         signup,
         login,
         logout,
-        updateUserDetails // Provide the update function
+        sendPasswordReset, // <-- Export new function
+        updateUserDetails,
+        reauthenticate,
+        updateUserPassword
     };
 
     return (

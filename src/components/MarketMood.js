@@ -1,87 +1,54 @@
-
 import React, { useState, useEffect } from 'react';
 
-// IMPORTANT: Paste your new Alpha Vantage API key here
-const API_KEY = 'P2HWNE9Z73J93JE2';
-
 const MarketMood = () => {
-  const [marketData, setMarketData] = useState({ change: 0, points: 0 });
-  const [loading, setLoading] = useState(true);
+    const [moodValue, setMoodValue] = useState(50); // Initial value (Neutral)
 
-  useEffect(() => {
-    const fetchMarketMood = async () => {
-      setLoading(true);
-      const url = `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=NSEI&apikey=${API_KEY}`;
-      
-      try {
-        const response = await fetch(url);
-        if (!response.ok) throw new Error('Network response was not ok');
-        
-        const data = await response.json();
-        const quote = data['Global Quote'];
+    useEffect(() => {
+        // Simulate live updates for the mood index
+        const interval = setInterval(() => {
+            setMoodValue(Math.floor(Math.random() * 101)); // Random value between 0 and 100
+        }, 5000); // Update every 5 seconds
 
-        if (quote && quote['09. change']) {
-          const changePercent = parseFloat(quote['10. change percent'].replace('%', ''));
-          const changePoints = parseFloat(quote['09. change']);
-          setMarketData({ change: changePercent, points: changePoints.toFixed(2) });
-        } else {
-          throw new Error('Invalid API response structure');
-        }
-      } catch (error) {
-        console.warn("Market Mood fetch failed. Note: The free Alpha Vantage API has a limit of 25 requests per day.", error);
-        setMarketData({ change: 0, points: 0 });
-      } finally {
-        setLoading(false);
-      }
+        return () => clearInterval(interval);
+    }, []);
+
+    const getMoodData = (value) => {
+        if (value <= 20) return { label: 'Extreme Fear', color: 'text-red-500' };
+        if (value <= 40) return { label: 'Fear', color: 'text-orange-500' };
+        if (value <= 60) return { label: 'Neutral', color: 'text-yellow-400' };
+        if (value <= 80) return { label: 'Greed', color: 'text-green-400' };
+        return { label: 'Extreme Greed', color: 'text-green-500' };
     };
 
-    fetchMarketMood();
-  }, []);
+    const mood = getMoodData(moodValue);
+    const rotation = (moodValue / 100) * 180 - 90;
 
-  const clampedChange = Math.max(-2, Math.min(2, marketData.change));
-  const rotation = (clampedChange / 2) * 90;
-  const arcLength = 125.6;
-  const offset = arcLength - ((clampedChange + 2) / 4) * arcLength;
-
-  let moodColor = 'text-amber-400';
-  if (marketData.change > 0.5) moodColor = 'text-green-500';
-  if (marketData.change < -0.5) moodColor = 'text-red-500';
-
-  return (
-    <div className="bg-gray-800 p-6 rounded-lg shadow-lg h-full flex flex-col justify-between">
-      <div>
-        <h2 className="text-xl font-semibold text-white mb-4">Market Mood: NIFTY 50</h2>
-        {loading ? (
-          <p className="text-center text-gray-400">Loading...</p>
-        ) : (
-          <div className="flex justify-center items-center h-48">
-            <div className="relative w-48 h-24">
-              <svg className="w-full h-full" viewBox="0 0 100 50">
-                <path d="M 10 50 A 40 40 0 0 1 90 50" fill="none" stroke="#374151" strokeWidth="8" />
-                <path d="M 10 50 A 40 40 0 0 1 90 50" fill="none" stroke="url(#mood-gradient)" strokeWidth="8" strokeDasharray="125.6" style={{ strokeDashoffset: offset, transition: 'stroke-dashoffset 0.7s ease-in-out' }}/>
-                <defs>
-                  <linearGradient id="mood-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                    <stop offset="0%" stopColor="#ef4444" />
-                    <stop offset="50%" stopColor="#fbbf24" />
-                    <stop offset="100%" stopColor="#22c55e" />
-                  </linearGradient>
-                </defs>
-                <line x1="50" y1="50" x2="50" y2="10" stroke="#9ca3af" strokeWidth="2" transform-origin="50 50" style={{ transform: `rotate(${rotation}deg)`, transition: 'transform 0.7s cubic-bezier(0.68, -0.55, 0.27, 1.55)' }} />
-              </svg>
-              <div className={`absolute bottom-0 w-full text-center text-xl font-bold ${moodColor}`}>
-                {marketData.change.toFixed(2)}%
-              </div>
+    return (
+        <div className="bg-primary-light p-6 rounded-lg shadow-lg border border-gray-700 h-full">
+            <h2 className="text-xl font-bold text-text-primary mb-4">Market Mood</h2>
+            <div className="flex flex-col items-center justify-center">
+                <div className="relative w-64 h-32 overflow-hidden">
+                    <div className="absolute top-0 left-0 w-full h-full">
+                        <div className="w-full h-full rounded-t-full border-t-[60px] border-l-[60px] border-r-[60px] border-b-0 border-solid border-transparent">
+                            <div className="absolute w-full h-full rounded-t-full border-t-[60px] border-l-[60px] border-r-[60px] border-b-0 border-solid border-red-500" style={{ clipPath: 'polygon(0% 0%, 20% 0%, 20% 100%, 0% 100%)' }}></div>
+                            <div className="absolute w-full h-full rounded-t-full border-t-[60px] border-l-[60px] border-r-[60px] border-b-0 border-solid border-orange-500" style={{ clipPath: 'polygon(20% 0%, 40% 0%, 40% 100%, 20% 100%)' }}></div>
+                            <div className="absolute w-full h-full rounded-t-full border-t-[60px] border-l-[60px] border-r-[60px] border-b-0 border-solid border-yellow-400" style={{ clipPath: 'polygon(40% 0%, 60% 0%, 60% 100%, 40% 100%)' }}></div>
+                            <div className="absolute w-full h-full rounded-t-full border-t-[60px] border-l-[60px] border-r-[60px] border-b-0 border-solid border-green-400" style={{ clipPath: 'polygon(60% 0%, 80% 0%, 80% 100%, 60% 100%)' }}></div>
+                            <div className="absolute w-full h-full rounded-t-full border-t-[60px] border-l-[60px] border-r-[60px] border-b-0 border-solid border-green-500" style={{ clipPath: 'polygon(80% 0%, 100% 0%, 100% 100%, 80% 100%)' }}></div>
+                        </div>
+                    </div>
+                    <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-4 h-32 origin-bottom transition-transform duration-500" style={{ transform: `rotate(${rotation}deg)` }}>
+                        <div className="w-1 h-16 bg-text-primary rounded-t-full mx-auto"></div>
+                        <div className="w-4 h-4 bg-text-primary rounded-full absolute bottom-0"></div>
+                    </div>
+                </div>
+                <div className="text-center mt-4">
+                    <p className={`text-2xl font-bold ${mood.color}`}>{mood.label}</p>
+                    <p className="text-4xl font-bold text-text-primary">{moodValue}</p>
+                </div>
             </div>
-          </div>
-        )}
-      </div>
-      <div className="text-center">
-        <p className={`text-lg font-bold ${moodColor}`}>
-          {marketData.points > 0 ? '+' : ''}{marketData.points} Points
-        </p>
-      </div>
-    </div>
-  );
+        </div>
+    );
 };
 
 export default MarketMood;

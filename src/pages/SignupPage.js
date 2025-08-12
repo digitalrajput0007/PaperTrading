@@ -13,7 +13,7 @@ const PasswordStrengthMeter = ({ validation }) => {
     const strength = [length, uppercase, lowercase, number, specialChar].filter(Boolean).length;
     const strengthColors = { 0: 'bg-gray-700', 1: 'bg-red-500', 2: 'bg-orange-500', 3: 'bg-yellow-500', 4: 'bg-blue-500', 5: 'bg-green-500' };
     const strengthText = { 0: '', 1: 'Very Weak', 2: 'Weak', 3: 'Medium', 4: 'Strong', 5: 'Very Strong' }
-    return (<div className="space-y-2 mt-2"><div className="w-full bg-gray-700 rounded-full h-2"><div className={`h-2 rounded-full transition-all duration-300 ${strengthColors[strength]}`} style={{ width: `${strength * 20}%` }}></div></div><p className={`text-xs font-semibold ${strength > 3 ? 'text-green-400' : 'text-gray-400'}`}>{strengthText[strength]}</p><ul className="text-xs text-gray-400 space-y-1"><li className={`flex items-center ${length ? 'text-green-400' : ''}`}>{length ? <CheckIcon /> : <CrossIcon />}<span className="ml-2">At least 8 characters long</span></li><li className={`flex items-center ${uppercase ? 'text-green-400' : ''}`}>{uppercase ? <CheckIcon /> : <CrossIcon />}<span className="ml-2">At least one uppercase letter (A-Z)</span></li><li className={`flex items-center ${lowercase ? 'text-green-400' : ''}`}>{lowercase ? <CheckIcon /> : <CrossIcon />}<span className="ml-2">At least one lowercase letter (a-z)</span></li><li className={`flex items-center ${number ? 'text-green-400' : ''}`}>{number ? <CheckIcon /> : <CrossIcon />}<span className="ml-2">At least one number (0-9)</span></li><li className={`flex items-center ${specialChar ? 'text-green-400' : ''}`}>{specialChar ? <CheckIcon /> : <CrossIcon />}<span className="ml-2">At least one special character (!@#$%)</span></li></ul></div>);
+    return (<div className="space-y-2 mt-2"><div className="w-full bg-gray-700 rounded-full h-2"><div className={`h-2 rounded-full transition-all duration-300 ${strengthColors[strength]}`} style={{ width: `${strength * 20}%` }}></div></div><p className={`text-xs font-semibold ${strength > 3 ? 'text-green-400' : 'text-gray-400'}`}>{strengthText[strength]}</p><ul className="text-xs text-text-secondary space-y-1"><li className={`flex items-center ${length ? 'text-green-400' : ''}`}>{length ? <CheckIcon /> : <CrossIcon />}<span className="ml-2">At least 8 characters long</span></li><li className={`flex items-center ${uppercase ? 'text-green-400' : ''}`}>{uppercase ? <CheckIcon /> : <CrossIcon />}<span className="ml-2">At least one uppercase letter (A-Z)</span></li><li className={`flex items-center ${lowercase ? 'text-green-400' : ''}`}>{lowercase ? <CheckIcon /> : <CrossIcon />}<span className="ml-2">At least one lowercase letter (a-z)</span></li><li className={`flex items-center ${number ? 'text-green-400' : ''}`}>{number ? <CheckIcon /> : <CrossIcon />}<span className="ml-2">At least one number (0-9)</span></li><li className={`flex items-center ${specialChar ? 'text-green-400' : ''}`}>{specialChar ? <CheckIcon /> : <CrossIcon />}<span className="ml-2">At least one special character (!@#$%)</span></li></ul></div>);
 };
 
 
@@ -28,8 +28,14 @@ const SignupPage = () => {
     const [passwordValidation, setPasswordValidation] = useState({ length: false, uppercase: false, lowercase: false, number: false, specialChar: false });
 
     useEffect(() => {
-        const { password } = formData;
-        setPasswordValidation({ length: password.length >= 8, uppercase: /[A-Z]/.test(password), lowercase: /[a-z]/.test(password), number: /[0-9]/.test(password), specialChar: /[!@#$%^&*(),.?":{}|<>]/.test(password) });
+        const password = formData.password;
+        setPasswordValidation({ 
+            length: password.length >= 8, 
+            uppercase: /[A-Z]/.test(password), 
+            lowercase: /[a-z]/.test(password), 
+            number: /[0-9]/.test(password), 
+            specialChar: /[!@#$%^&*(),.?":{}|<>]/.test(password) 
+        });
     }, [formData.password]);
 
     const handleChange = (e) => {
@@ -66,14 +72,13 @@ const SignupPage = () => {
         }
 
         try {
-            // Pass all form fields to the signup function
             await signup(
                 formData.email, 
                 formData.password, 
                 formData.firstName, 
                 formData.lastName,
-                formData.mobile, // Pass mobile
-                formData.gender   // Pass gender
+                formData.mobile,
+                formData.gender
             );
             
             navigate('/login');
@@ -86,41 +91,41 @@ const SignupPage = () => {
     };
 
     return (
-        <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center p-4 font-sans">
-            <div className="bg-gray-800 p-8 rounded-xl shadow-2xl w-full max-w-lg border border-gray-700">
-                <h2 className="text-3xl font-bold mb-6 text-center text-cyan-400">Create Your Account</h2>
+        <div className="min-h-screen bg-primary flex items-center justify-center p-4">
+            <div className="bg-primary-light p-8 rounded-lg shadow-lg w-full max-w-lg border border-gray-700">
+                <h2 className="text-3xl font-bold mb-6 text-center text-text-primary">Create Your Account</h2>
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <input type="text" name="firstName" placeholder="First Name" value={formData.firstName} onChange={handleChange} className="w-full p-3 bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500 transition" required />
-                        <input type="text" name="lastName" placeholder="Last Name" value={formData.lastName} onChange={handleChange} className="w-full p-3 bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500 transition" required />
+                        <input type="text" name="firstName" placeholder="First Name" value={formData.firstName} onChange={handleChange} className="w-full p-3 bg-primary rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary transition text-text-primary" required />
+                        <input type="text" name="lastName" placeholder="Last Name" value={formData.lastName} onChange={handleChange} className="w-full p-3 bg-primary rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary transition text-text-primary" required />
                     </div>
-                    <input type="email" name="email" placeholder="Email Address" value={formData.email} onChange={handleChange} className="w-full p-3 bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500 transition" required />
+                    <input type="email" name="email" placeholder="Email Address" value={formData.email} onChange={handleChange} className="w-full p-3 bg-primary rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary transition text-text-primary" required />
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <input type="tel" name="mobile" placeholder="Mobile Number" value={formData.mobile} onChange={handleChange} className="w-full p-3 bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500 transition" />
-                        <select name="gender" value={formData.gender} onChange={handleChange} className="w-full p-3 bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500 transition" required>
+                        <input type="tel" name="mobile" placeholder="Mobile Number" value={formData.mobile} onChange={handleChange} className="w-full p-3 bg-primary rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary transition text-text-primary" />
+                        <select name="gender" value={formData.gender} onChange={handleChange} className="w-full p-3 bg-primary rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary transition text-text-primary" required>
                             <option value="" disabled>Select Gender</option>
                             <option value="Male">Male</option>
                             <option value="Female">Female</option>
                         </select>
                     </div>
                     <div className="relative">
-                        <input type={showPassword ? "text" : "password"} name="password" placeholder="Password" value={formData.password} onChange={handleChange} className="w-full p-3 bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500 transition" required />
-                        <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute inset-y-0 right-0 px-3 flex items-center text-gray-400 hover:text-cyan-400">{showPassword ? <EyeSlashIcon className="h-5 w-5"/> : <EyeIcon className="h-5 w-5"/>}</button>
+                        <input type={showPassword ? "text" : "password"} name="password" placeholder="Password" value={formData.password} onChange={handleChange} className="w-full p-3 bg-primary rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary transition text-text-primary" required />
+                        <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute inset-y-0 right-0 px-3 flex items-center text-text-secondary hover:text-secondary">{showPassword ? <EyeSlashIcon className="h-5 w-5"/> : <EyeIcon className="h-5 w-5"/>}</button>
                     </div>
                     {formData.password && <PasswordStrengthMeter validation={passwordValidation} />}
                     <div className="relative">
-                        <input type={showConfirmPassword ? "text" : "password"} name="confirmPassword" placeholder="Confirm Password" value={formData.confirmPassword} onChange={handleChange} className="w-full p-3 bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500 transition" required />
-                        <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute inset-y-0 right-0 px-3 flex items-center text-gray-400 hover:text-cyan-400">{showConfirmPassword ? <EyeSlashIcon className="h-5 w-5"/> : <EyeIcon className="h-5 w-5"/>}</button>
+                        <input type={showConfirmPassword ? "text" : "password"} name="confirmPassword" placeholder="Confirm Password" value={formData.confirmPassword} onChange={handleChange} className="w-full p-3 bg-primary rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary transition text-text-primary" required />
+                        <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute inset-y-0 right-0 px-3 flex items-center text-text-secondary hover:text-secondary">{showConfirmPassword ? <EyeSlashIcon className="h-5 w-5"/> : <EyeIcon className="h-5 w-5"/>}</button>
                     </div>
                     <div className="flex items-center">
-                        <input type="checkbox" id="agree" checked={agree} onChange={(e) => setAgree(e.target.checked)} className="h-4 w-4 text-cyan-600 bg-gray-700 border-gray-600 rounded focus:ring-cyan-500" />
-                        <label htmlFor="agree" className="ml-2 block text-sm text-gray-400">
-                            I agree to the <button type="button" className="font-medium text-cyan-400 hover:underline" onClick={() => toast('Terms and Conditions page is not yet implemented.')}>Terms and Conditions</button>
+                        <input type="checkbox" id="agree" checked={agree} onChange={(e) => setAgree(e.target.checked)} className="h-4 w-4 text-secondary bg-gray-700 border-gray-600 rounded focus:ring-secondary" />
+                        <label htmlFor="agree" className="ml-2 block text-sm text-text-secondary">
+                            I agree to the <button type="button" className="font-medium text-secondary hover:underline" onClick={() => toast('Terms and Conditions page is not yet implemented.')}>Terms and Conditions</button>
                         </label>
                     </div>
-                    <button type="submit" disabled={loading || !isPasswordValid} className="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-3 rounded-lg transition duration-300 disabled:bg-gray-500 disabled:cursor-not-allowed">{loading ? 'Creating Account...' : 'Sign Up'}</button>
+                    <button type="submit" disabled={loading || !isPasswordValid} className="w-full bg-secondary hover:bg-secondary-dark text-white font-bold py-3 rounded-lg transition duration-300 disabled:bg-gray-500 disabled:cursor-not-allowed">{loading ? 'Creating Account...' : 'Sign Up'}</button>
                 </form>
-                <p className="mt-6 text-center text-sm text-gray-400">Already have an account?{' '}<Link to="/login" className="font-medium text-cyan-400 hover:underline">Log In</Link></p>
+                <p className="mt-6 text-center text-sm text-text-secondary">Already have an account?{' '}<Link to="/login" className="font-medium text-secondary hover:underline">Log In</Link></p>
             </div>
         </div>
     );

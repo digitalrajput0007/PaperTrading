@@ -51,7 +51,7 @@ const PositionSizerPage = () => {
 
     return (
         <div>
-            <h1 className="text-3xl font-bold text-text-primary mb-8">Position Size Calculator</h1>
+            <h1 className="text-3xl font-bold text-text-primary mb-8 md:hidden">Position Size Calculator</h1>
             <div className="bg-primary-light p-8 rounded-lg shadow-lg max-w-lg mx-auto border border-gray-700">
                 <div className="space-y-6">
                     <div>

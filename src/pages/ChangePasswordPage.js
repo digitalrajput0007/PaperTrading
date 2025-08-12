@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import toast from 'react-hot-toast'; // Import toast
 
 // --- Helper Components & Icons (Copied from SignupPage) ---
 const EyeIcon = ({ className }) => (<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}><path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>);
@@ -15,12 +16,10 @@ const PasswordStrengthMeter = ({ validation }) => {
 };
 
 const ChangePasswordPage = () => {
-  const { reauthenticate, updatePassword } = useAuth();
+  const { reauthenticate, updateUserPassword } = useAuth();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
@@ -39,36 +38,31 @@ const ChangePasswordPage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
-    setMessage('');
 
     const isPasswordValid = Object.values(passwordValidation).every(Boolean);
 
     if (!isPasswordValid) {
-        return setError("New password does not meet all the requirements.");
+        return toast.error("New password does not meet all the requirements.");
     }
     if (newPassword !== confirmPassword) {
-        return setError("New passwords do not match.");
+        return toast.error("New passwords do not match.");
     }
 
     setIsLoading(true);
     try {
-      // Step 1: Re-authenticate the user with their current password
       await reauthenticate(currentPassword);
-      
-      // Step 2: If re-authentication is successful, update to the new password
-      await updatePassword(newPassword);
+      await updateUserPassword(newPassword);
 
-      setMessage('Password updated successfully!');
+      toast.success('Password updated successfully!');
+      
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
     } catch (err) {
-      // Handle specific error for wrong password
       if (err.code === 'auth/wrong-password') {
-        setError('Incorrect current password. Please try again.');
+        toast.error('The current password you entered is incorrect. Please try again.');
       } else {
-        setError('Failed to update password. Please try again.');
+        toast.error('Failed to update password. Please try again.');
         console.error(err);
       }
     }
@@ -81,8 +75,6 @@ const ChangePasswordPage = () => {
     <div>
       <h1 className="text-3xl font-bold text-text-primary mb-6">Change Your Password</h1>
       <div className="bg-primary-light p-8 rounded-lg shadow-lg max-w-lg mx-auto">
-        {error && <p className="text-center mb-4 text-red-500">{error}</p>}
-        {message && <p className="text-center mb-4 text-green-500">{message}</p>}
         <form onSubmit={handleSubmit} className="space-y-4">
           
           <div className="relative">

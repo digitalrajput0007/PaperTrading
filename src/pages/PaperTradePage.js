@@ -86,10 +86,75 @@ const TableControls = ({ totalItems, itemsPerPage, setItemsPerPage, currentPage,
     );
 };
 
+// --- Segmented Speedometer Gauge Component ---
+const WinRateGauge = ({ winPercentage = 0 }) => {
+    const percentage = Math.min(100, Math.max(0, winPercentage));
+    const rotation = (percentage / 100) * 180 - 90;
+
+    const Arc = ({ color, from, to }) => {
+        const describeArcSegment = (cx, cy, outerRadius, innerRadius, startAngle, endAngle) => {
+            const startOuter = {
+                x: cx + outerRadius * Math.cos(startAngle * Math.PI / 180),
+                y: cy + outerRadius * Math.sin(startAngle * Math.PI / 180)
+            };
+            const endOuter = {
+                x: cx + outerRadius * Math.cos(endAngle * Math.PI / 180),
+                y: cy + outerRadius * Math.sin(endAngle * Math.PI / 180)
+            };
+            
+            const startInner = {
+                x: cx + innerRadius * Math.cos(endAngle * Math.PI / 180),
+                y: cy + innerRadius * Math.sin(endAngle * Math.PI / 180)
+            };
+            const endInner = {
+                x: cx + innerRadius * Math.cos(startAngle * Math.PI / 180),
+                y: cy + innerRadius * Math.sin(startAngle * Math.PI / 180)
+            };
+
+            const largeArcFlag = endAngle - startAngle <= 180 ? "0" : "1";
+
+            const d = [
+                "M", startOuter.x, startOuter.y,
+                "A", outerRadius, outerRadius, 0, largeArcFlag, 1, endOuter.x, endOuter.y,
+                "L", startInner.x, startInner.y,
+                "A", innerRadius, innerRadius, 0, largeArcFlag, 0, endInner.x, endInner.y,
+                "Z"
+            ].join(" ");
+
+            return d;
+        };
+        return <path d={describeArcSegment(100, 100, 80, 55, from, to)} fill={color} />;
+    };
+
+    return (
+        <div className="relative w-64 h-44 flex flex-col items-center justify-start">
+            <svg viewBox="0 0 200 100" className="w-full h-auto">
+                {/* Gauge Segments */}
+                <Arc color="#d9534f" from={180} to={216} /> {/* Red */}
+                <Arc color="#f0ad4e" from={216} to={252} /> {/* Orange */}
+                <Arc color="#ffd700" from={252} to={288} /> {/* Yellow */}
+                <Arc color="#5cb85c" from={288} to={324} /> {/* Light Green */}
+                <Arc color="#4cae4c" from={324} to={360} /> {/* Dark Green */}
+
+                {/* Needle */}
+                <g style={{ transform: `rotate(${rotation}deg)`, transformOrigin: '100px 100px', transition: 'transform 0.5s ease-out' }}>
+                    <path d="M 100 25 L 95 100 L 105 100 Z" fill="#4A5568" />
+                    <circle cx="100" cy="100" r="5" fill="#4A5568" />
+                </g>
+            </svg>
+            <div className="flex flex-col items-center mt-2">
+                <span className="text-3xl font-bold text-text-primary">{percentage.toFixed(1)}%</span>
+                <span className="text-sm text-text-secondary">Win Rate</span>
+            </div>
+        </div>
+    );
+};
+
 
 const PaperTradePage = () => {
     const { currentUser } = useAuth();
-    const [formData, setFormData] = useState({ symbol: '', quantity: '', price: '', type: 'BUY' });
+    // Add brokerage to initial form state
+    const [formData, setFormData] = useState({ symbol: '', quantity: '', price: '', type: 'BUY', remarks: '', brokerage: '' });
     const [openPositions, setOpenPositions] = useState([]);
     const [closedTrades, setClosedTrades] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -118,6 +183,15 @@ const PaperTradePage = () => {
         return closedTrades.slice(startIndex, startIndex + closedItemsPerPage);
     }, [closedTrades, closedCurrentPage, closedItemsPerPage]);
 
+    const tradeStats = useMemo(() => {
+        const totalTrades = closedTrades.length;
+        const wins = closedTrades.filter(trade => trade.pnl > 0).length;
+        const losses = totalTrades - wins;
+        const winPercentage = totalTrades > 0 ? (wins / totalTrades) * 100 : 0;
+        // P&L is already calculated net of brokerage, so this remains correct
+        const totalPnl = closedTrades.reduce((acc, trade) => acc + (trade.pnl || 0), 0);
+        return { totalTrades, wins, losses, winPercentage, totalPnl };
+    }, [closedTrades]);
 
     useEffect(() => {
         if (!currentUser) return;
@@ -145,7 +219,6 @@ const PaperTradePage = () => {
         return () => unsubscribe();
     }, [currentUser]);
 
-    // --- Helper Functions ---
     const handleChange = (e) => {
         const { name, value } = e.target;
         setFormData({ ...formData, [name]: value });
@@ -158,11 +231,10 @@ const PaperTradePage = () => {
         return 'Processing...';
     };
 
-    // --- CRUD Operations ---
     const handleNewTrade = async (e) => {
         e.preventDefault();
         if (!formData.symbol || !formData.quantity || !formData.price) {
-            return toast.error("Please fill in all fields.");
+            return toast.error("Please fill in all required fields.");
         }
         try {
             await addDoc(collection(db, "users", currentUser.uid, "trades"), {
@@ -170,10 +242,13 @@ const PaperTradePage = () => {
                 quantity: Number(formData.quantity),
                 entryPrice: Number(formData.price),
                 type: formData.type,
+                remarks: formData.remarks,
+                brokerage: Number(formData.brokerage) || 0, // Save brokerage
                 status: 'OPEN',
                 entryDate: new Date(),
             });
-            setFormData({ symbol: '', quantity: '', price: '', type: 'BUY' });
+            // Reset form including brokerage
+            setFormData({ symbol: '', quantity: '', price: '', type: 'BUY', remarks: '', brokerage: '' });
             toast.success("Trade placed successfully!");
         } catch (err) {
             toast.error("Failed to add new trade.");
@@ -186,13 +261,22 @@ const PaperTradePage = () => {
             return toast.error("Please enter a valid positive exit price.");
         }
         const tradeToClose = openPositions.find(p => p.id === tradeId);
-        const pnl = (exitPrice - tradeToClose.entryPrice) * tradeToClose.quantity;
+        const brokerage = tradeToClose.brokerage || 0; // Get brokerage from the trade
+        let pnl;
+
+        // Calculate P&L considering brokerage
+        if (tradeToClose.type === 'BUY') {
+            pnl = ((Number(exitPrice) - tradeToClose.entryPrice) * tradeToClose.quantity) - brokerage;
+        } else {
+            pnl = ((tradeToClose.entryPrice - Number(exitPrice)) * tradeToClose.quantity) - brokerage;
+        }
+        
         try {
             await updateDoc(doc(db, "users", currentUser.uid, "trades", tradeId), {
                 status: 'CLOSED',
                 exitPrice: Number(exitPrice),
                 exitDate: new Date(),
-                pnl: pnl
+                pnl: pnl // Save the net P&L
             });
             setExitPrices(prev => { const newPrices = {...prev}; delete newPrices[tradeId]; return newPrices; });
             toast.success("Trade closed successfully!");
@@ -221,6 +305,8 @@ const PaperTradePage = () => {
                 symbol: editingTrade.symbol.toUpperCase(),
                 quantity: Number(editingTrade.quantity),
                 entryPrice: Number(editingTrade.entryPrice),
+                brokerage: Number(editingTrade.brokerage) || 0, // Update brokerage
+                remarks: editingTrade.remarks
             });
             toast.success("Trade updated successfully!");
         } catch (err) {
@@ -230,7 +316,6 @@ const PaperTradePage = () => {
         setEditingTrade(null);
     };
     
-    // --- Modal Openers ---
     const openEditModal = (trade) => {
         setEditingTrade(trade);
         setIsEditModalOpen(true);
@@ -241,24 +326,60 @@ const PaperTradePage = () => {
         setIsDeleteModalOpen(true);
     };
 
-    const totalPnl = closedTrades.reduce((acc, trade) => acc + (trade.pnl || 0), 0);
-
     return (
         <div className="p-4 md:p-6">
-            <h1 className="text-3xl font-bold text-text-primary mb-8">Paper Trading</h1>
+            <h1 className="text-3xl font-bold text-text-primary mb-8 md:hidden">Dashboard</h1>
+            
+            <div className="bg-primary-light p-6 rounded-lg shadow-lg mb-8 border border-gray-700">
+                <h2 className="text-xl font-semibold text-text-primary mb-4">Trade Statistics</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+                    
+                    <div className="w-full flex flex-col items-center justify-center">
+                        <WinRateGauge winPercentage={tradeStats.winPercentage} />
+                    </div>
+                    
+                    <div className="w-full grid grid-cols-2 lg:grid-cols-3 gap-4 text-center">
+                        <div className="flex flex-col items-center bg-primary p-4 rounded-lg">
+                            <span className="text-4xl font-bold text-green-400">{tradeStats.wins}</span>
+                            <span className="text-text-secondary mt-1">Wins</span>
+                        </div>
+                        <div className="flex flex-col items-center bg-primary p-4 rounded-lg">
+                            <span className="text-4xl font-bold text-red-400">{tradeStats.losses}</span>
+                            <span className="text-text-secondary mt-1">Losses</span>
+                        </div>
+                        <div className="flex flex-col items-center bg-primary p-4 rounded-lg">
+                            <span className="text-4xl font-bold text-text-primary">{tradeStats.totalTrades}</span>
+                            <span className="text-text-secondary mt-1">Total Trades</span>
+                        </div>
+                        <div className="col-span-2 lg:col-span-3 flex flex-col items-center bg-primary p-4 rounded-lg">
+                            <span className={`text-4xl font-bold ${tradeStats.totalPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                {tradeStats.totalPnl >= 0 ? '+' : ''}₹{tradeStats.totalPnl.toFixed(2)}
+                            </span>
+                            <span className="text-text-secondary mt-1">Total Net P&L</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
-            {/* --- New Trade Form --- */}
             <div className="bg-primary-light p-6 rounded-lg shadow-lg mb-8 border border-gray-700">
                 <h2 className="text-xl font-semibold text-text-primary mb-4">Enter a New Trade</h2>
-                <form onSubmit={handleNewTrade} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-end">
+                {/* Updated form grid layout */}
+                <form onSubmit={handleNewTrade} className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 items-end">
+                    <select name="type" value={formData.type} onChange={handleChange} className="p-3 bg-primary rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-secondary transition text-white">
+                        <option value="BUY">BUY</option>
+                        <option value="SELL">SELL</option>
+                    </select>
                     <input name="symbol" value={formData.symbol} onChange={handleChange} placeholder="Symbol (e.g., RELIANCE)" className="p-3 bg-primary rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-secondary transition" />
                     <input name="quantity" type="number" value={formData.quantity} onChange={handleChange} placeholder="Quantity" className="p-3 bg-primary rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-secondary transition" />
                     <input name="price" type="number" step="any" value={formData.price} onChange={handleChange} placeholder="Entry Price" className="p-3 bg-primary rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-secondary transition" />
-                    <button type="submit" className="bg-secondary hover:bg-secondary-dark text-white font-bold py-3 px-4 rounded-lg transition duration-300 w-full">Place Order</button>
+                    {/* New Brokerage Input */}
+                    <input name="brokerage" type="number" step="any" value={formData.brokerage} onChange={handleChange} placeholder="Brokerage & Taxes" className="p-3 bg-primary rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-secondary transition" />
+                    <input name="remarks" value={formData.remarks} onChange={handleChange} placeholder="Remarks" className="p-3 bg-primary rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-secondary transition" />
+                    {/* Updated button span */}
+                    <button type="submit" className="md:col-span-3 lg:col-span-6 bg-secondary hover:bg-secondary-dark text-white font-bold py-3 px-4 rounded-lg transition duration-300 w-full">Place Order</button>
                 </form>
             </div>
 
-            {/* --- Open Positions --- */}
             <div className="bg-primary-light p-6 rounded-lg shadow-lg mb-8 border border-gray-700">
                 <h2 className="text-xl font-semibold text-text-primary mb-4">Open Positions</h2>
                 <div className="overflow-x-auto">
@@ -268,9 +389,12 @@ const PaperTradePage = () => {
                                 <thead className="border-b border-gray-700 text-text-secondary">
                                     <tr>
                                         <th className="text-left p-3 font-semibold">Symbol</th>
+                                        <th className="text-left p-3 font-semibold">Type</th>
                                         <th className="text-left p-3 font-semibold">Quantity</th>
                                         <th className="text-left p-3 font-semibold">Entry Price</th>
+                                        <th className="text-left p-3 font-semibold">Brokerage</th>
                                         <th className="text-left p-3 font-semibold">Entry Date & Time</th>
+                                        <th className="text-left p-3 font-semibold">Remarks</th>
                                         <th className="text-left p-3 font-semibold">Exit Price</th>
                                         <th className="text-left p-3 font-semibold">Actions</th>
                                     </tr>
@@ -279,9 +403,12 @@ const PaperTradePage = () => {
                                     {paginatedOpenPositions.map(pos => (
                                         <tr key={pos.id} className="border-b border-gray-700 hover:bg-primary transition">
                                             <td className="p-3 font-bold">{pos.symbol}</td>
+                                            <td className={`p-3 font-bold ${pos.type === 'BUY' ? 'text-green-400' : 'text-red-400'}`}>{pos.type}</td>
                                             <td className="p-3">{pos.quantity}</td>
                                             <td className="p-3">₹{(pos.entryPrice || 0).toFixed(2)}</td>
+                                            <td className="p-3">₹{(pos.brokerage || 0).toFixed(2)}</td>
                                             <td className="p-3 text-text-secondary">{formatDateTime(pos.entryDate)}</td>
+                                            <td className="p-3">{pos.remarks}</td>
                                             <td className="p-3">
                                                 <input type="number" step="any" placeholder="Exit Price" value={exitPrices[pos.id] || ''} onChange={(e) => handleExitPriceChange(pos.id, e.target.value)} className="p-2 bg-primary rounded-md w-full md:w-28 focus:outline-none focus:ring-2 focus:ring-secondary transition" />
                                             </td>
@@ -301,11 +428,13 @@ const PaperTradePage = () => {
                                     <div key={pos.id} className="bg-primary p-4 rounded-lg border border-gray-700">
                                         <div className="flex justify-between items-center mb-2">
                                             <span className="font-bold text-lg">{pos.symbol}</span>
-                                            <span className="text-sm text-text-secondary">{formatDateTime(pos.entryDate)}</span>
+                                            <span className={`text-sm font-bold ${pos.type === 'BUY' ? 'text-green-400' : 'text-red-400'}`}>{pos.type}</span>
                                         </div>
                                         <div className="text-sm space-y-1">
                                             <p><strong>Quantity:</strong> {pos.quantity}</p>
                                             <p><strong>Entry Price:</strong> ₹{(pos.entryPrice || 0).toFixed(2)}</p>
+                                            <p><strong>Brokerage:</strong> ₹{(pos.brokerage || 0).toFixed(2)}</p>
+                                            <p><strong>Remarks:</strong> {pos.remarks || 'N/A'}</p>
                                             <div className="flex items-center space-x-2 pt-2">
                                                 <input type="number" step="any" placeholder="Exit Price" value={exitPrices[pos.id] || ''} onChange={(e) => handleExitPriceChange(pos.id, e.target.value)} className="p-2 bg-primary-light rounded-md w-full focus:outline-none focus:ring-2 focus:ring-secondary transition" />
                                                 <button onClick={() => handleCloseTrade(pos.id)} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-3 rounded-md transition text-xs">Close</button>
@@ -324,15 +453,8 @@ const PaperTradePage = () => {
                 </div>
             </div>
 
-            {/* --- Closed Trades --- */}
-             <div className="bg-primary-light p-6 rounded-lg shadow-lg border border-gray-700">
-                <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-xl font-semibold text-text-primary">Trade History</h2>
-                    <div className="text-right">
-                        <p className="text-text-secondary text-sm">Total P/L</p>
-                        <p className={`text-2xl font-bold ${totalPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>{totalPnl >= 0 ? '+' : ''}₹{totalPnl.toFixed(2)}</p>
-                    </div>
-                </div>
+            <div className="bg-primary-light p-6 rounded-lg shadow-lg mb-8 border border-gray-700">
+                <h2 className="text-xl font-semibold text-text-primary mb-4">Trade History</h2>
                 <div className="overflow-x-auto">
                     {loading ? <p className="text-text-secondary">Loading...</p> : closedTrades.length > 0 ? (
                         <>
@@ -340,10 +462,13 @@ const PaperTradePage = () => {
                                 <thead className="border-b border-gray-700 text-text-secondary">
                                     <tr>
                                         <th className="text-left p-3 font-semibold">Symbol</th>
-                                        <th className="text-left p-3 font-semibold">P/L</th>
+                                        <th className="text-left p-3 font-semibold">Type</th>
+                                        <th className="text-left p-3 font-semibold">Net P/L</th>
                                         <th className="text-left p-3 font-semibold">Entry Price</th>
                                         <th className="text-left p-3 font-semibold">Exit Price</th>
+                                        <th className="text-left p-3 font-semibold">Brokerage</th>
                                         <th className="text-left p-3 font-semibold">Exit Date & Time</th>
+                                        <th className="text-left p-3 font-semibold">Remarks</th>
                                         <th className="text-left p-3 font-semibold">Action</th>
                                     </tr>
                                 </thead>
@@ -351,10 +476,13 @@ const PaperTradePage = () => {
                                     {paginatedClosedTrades.map(trade => (
                                         <tr key={trade.id} className="border-b border-gray-700 hover:bg-primary transition">
                                             <td className="p-3 font-bold">{trade.symbol}</td>
+                                            <td className={`p-3 font-bold ${trade.type === 'BUY' ? 'text-green-400' : 'text-red-400'}`}>{trade.type}</td>
                                             <td className={`p-3 font-bold ${trade.pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>{trade.pnl >= 0 ? '+' : ''}₹{(trade.pnl || 0).toFixed(2)}</td>
                                             <td className="p-3">₹{(trade.entryPrice || 0).toFixed(2)}</td>
                                             <td className="p-3">₹{(trade.exitPrice || 0).toFixed(2)}</td>
+                                            <td className="p-3">₹{(trade.brokerage || 0).toFixed(2)}</td>
                                             <td className="p-3 text-text-secondary">{formatDateTime(trade.exitDate)}</td>
+                                            <td className="p-3">{trade.remarks}</td>
                                             <td className="p-3">
                                                 <button onClick={() => openDeleteModal(trade.id)} className="bg-gray-600 hover:bg-gray-700 text-white p-2 rounded-md transition"><DeleteIcon /></button>
                                             </td>
@@ -362,7 +490,7 @@ const PaperTradePage = () => {
                                     ))}
                                 </tbody>
                             </table>
-                             <div className="md:hidden space-y-4">
+                            <div className="md:hidden space-y-4">
                                 {paginatedClosedTrades.map(trade => (
                                     <div key={trade.id} className="bg-primary p-4 rounded-lg border border-gray-700">
                                         <div className="flex justify-between items-center mb-2">
@@ -370,8 +498,11 @@ const PaperTradePage = () => {
                                             <span className={`font-bold ${trade.pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>{trade.pnl >= 0 ? '+' : ''}₹{(trade.pnl || 0).toFixed(2)}</span>
                                         </div>
                                         <div className="text-sm space-y-1 text-text-secondary">
+                                            <p><strong>Type:</strong> <span className={`font-bold ${trade.type === 'BUY' ? 'text-green-400' : 'text-red-400'}`}>{trade.type}</span></p>
                                             <p><strong>Entry:</strong> ₹{(trade.entryPrice || 0).toFixed(2)} | <strong>Exit:</strong> ₹{(trade.exitPrice || 0).toFixed(2)}</p>
+                                            <p><strong>Brokerage:</strong> ₹{(trade.brokerage || 0).toFixed(2)}</p>
                                             <p><strong>Exited on:</strong> {formatDateTime(trade.exitDate)}</p>
+                                            <p><strong>Remarks:</strong> {trade.remarks || 'N/A'}</p>
                                         </div>
                                         <div className="flex justify-end mt-3">
                                             <button onClick={() => openDeleteModal(trade.id)} className="bg-gray-600 hover:bg-gray-700 text-white p-2 rounded-md transition"><DeleteIcon /></button>
@@ -404,6 +535,14 @@ const PaperTradePage = () => {
                                     <label className="block mb-1 font-semibold">Entry Price</label>
                                     <input type="number" step="any" value={editingTrade.entryPrice} onChange={(e) => setEditingTrade({...editingTrade, entryPrice: e.target.value})} className="p-2 bg-primary rounded-md w-full" />
                                 </div>
+                                <div>
+                                    <label className="block mb-1 font-semibold">Brokerage & Taxes</label>
+                                    <input type="number" step="any" value={editingTrade.brokerage} onChange={(e) => setEditingTrade({...editingTrade, brokerage: e.target.value})} className="p-2 bg-primary rounded-md w-full" />
+                                </div>
+                                <div>
+                                    <label className="block mb-1 font-semibold">Remarks</label>
+                                    <input value={editingTrade.remarks} onChange={(e) => setEditingTrade({...editingTrade, remarks: e.target.value})} className="p-2 bg-primary rounded-md w-full" />
+                                </div>
                             </div>
                             <div className="flex justify-end space-x-4 mt-6">
                                 <button type="button" onClick={() => setIsEditModalOpen(false)} className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded">Cancel</button>
@@ -417,15 +556,15 @@ const PaperTradePage = () => {
             {/* --- Delete Confirmation Modal --- */}
             {isDeleteModalOpen && (
                  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-                    <div className="bg-primary-light rounded-lg p-8 w-full max-w-md">
-                        <h2 className="text-xl font-bold mb-4">Confirm Deletion</h2>
-                        <p>Are you sure you want to permanently delete this trade? This action cannot be undone.</p>
-                        <div className="flex justify-end space-x-4 mt-6">
-                            <button type="button" onClick={() => setIsDeleteModalOpen(false)} className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded">Cancel</button>
-                            <button type="button" onClick={handleDeleteTrade} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">Delete</button>
-                        </div>
-                    </div>
-                </div>
+                       <div className="bg-primary-light rounded-lg p-8 w-full max-w-md">
+                           <h2 className="text-xl font-bold mb-4">Confirm Deletion</h2>
+                           <p>Are you sure you want to permanently delete this trade? This action cannot be undone.</p>
+                           <div className="flex justify-end space-x-4 mt-6">
+                                <button type="button" onClick={() => setIsDeleteModalOpen(false)} className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded">Cancel</button>
+                                <button type="button" onClick={handleDeleteTrade} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">Delete</button>
+                           </div>
+                       </div>
+                 </div>
             )}
         </div>
     );

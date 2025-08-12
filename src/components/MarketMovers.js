@@ -1,77 +1,47 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 
-// IMPORTANT: Paste your new Alpha Vantage API key here
-const API_KEY = 'P2HWNE9Z73J93JE2';
+// --- Helper Icon Components ---
+const ArrowUpIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 10l7-7m0 0l7 7m-7-7v18" /></svg>;
+const ArrowDownIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 14l-7 7m0 0l-7-7m7 7V3" /></svg>;
 
-const MarketMovers = () => {
-  const [gainers, setGainers] = useState([]);
-  const [losers, setLosers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  useEffect(() => {
-    const fetchMarketMovers = async () => {
-      setLoading(true);
-      setError(null);
-      const url = `https://www.alphavantage.co/query?function=TOP_GAINERS_LOSERS&apikey=${API_KEY}`;
-      
-      try {
-        const response = await fetch(url);
-        if (!response.ok) throw new Error('Network response was not ok');
-        
-        const data = await response.json();
-
-        if (data.top_gainers && data.top_losers) {
-          setGainers(data.top_gainers.slice(0, 5));
-          setLosers(data.top_losers.slice(0, 5));
-        } else {
-           throw new Error('Invalid API response structure for movers.');
-        }
-      } catch (err) {
-        console.warn("Market Movers fetch failed. Note: The free Alpha Vantage API has a limit of 25 requests per day.", err);
-        setError("Could not load live market data.");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchMarketMovers();
-  }, []);
-
-  const StockList = ({ title, stocks, colorClass }) => (
-    <div>
-      <h3 className={`text-lg font-semibold mb-2 ${colorClass}`}>{title}</h3>
-      <ul className="space-y-2">
-        {stocks.map(stock => (
-          <li key={stock.ticker} className="flex justify-between items-center text-sm">
-            <span className="font-medium">{stock.ticker}</span>
-            <div className="text-right">
-              <span className="font-bold">${parseFloat(stock.price).toFixed(2)}</span>
-              <span className={`ml-2 ${colorClass}`}>
-                {parseFloat(stock.change_percentage).toFixed(2)}%
-              </span>
-            </div>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-
-  return (
-    <div className="bg-gray-800 p-6 rounded-lg shadow-lg h-full">
-      <h2 className="text-xl font-semibold text-white mb-4">Top Market Movers (US Market)</h2>
-       {loading ? (
-        <p className="text-gray-400 text-center">Fetching market data...</p>
-      ) : error ? (
-        <p className="text-red-400 text-center">{error}</p>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <StockList title="Top Gainers" stocks={gainers} colorClass="text-green-500" />
-          <StockList title="Top Losers" stocks={losers} colorClass="text-red-500" />
+const MoverItem = ({ stock, isGainer }) => (
+    <div className="flex justify-between items-center p-3 hover:bg-primary transition-colors duration-200 rounded-md">
+        <span className="font-semibold text-text-primary">{stock.symbol}</span>
+        <div className="flex items-center space-x-2">
+            <span className="text-text-secondary">₹{stock.price.toFixed(2)}</span>
+            <span className={`font-bold ${isGainer ? 'text-green-400' : 'text-red-400'}`}>
+                {isGainer ? '+' : ''}{stock.changePercent.toFixed(2)}%
+            </span>
+            {isGainer ? <ArrowUpIcon /> : <ArrowDownIcon />}
         </div>
-      )}
     </div>
-  );
+);
+
+const MarketMovers = ({ data }) => {
+    // Sort stocks to find top 5 gainers and losers
+    const sortedStocks = [...data].sort((a, b) => b.changePercent - a.changePercent);
+    const topGainers = sortedStocks.slice(0, 5);
+    const topLosers = sortedStocks.slice(-5).reverse();
+
+    return (
+        <div className="bg-primary-light p-6 rounded-lg shadow-lg border border-gray-700 h-full">
+            <h2 className="text-xl font-bold text-text-primary mb-4">Market Movers</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <h3 className="text-lg font-semibold text-green-400 mb-2">Top Gainers</h3>
+                    <div className="space-y-2">
+                        {topGainers.map(stock => <MoverItem key={stock.symbol} stock={stock} isGainer={true} />)}
+                    </div>
+                </div>
+                <div>
+                    <h3 className="text-lg font-semibold text-red-400 mb-2">Top Losers</h3>
+                    <div className="space-y-2">
+                        {topLosers.map(stock => <MoverItem key={stock.symbol} stock={stock} isGainer={false} />)}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
 };
 
 export default MarketMovers;

@@ -1,17 +1,22 @@
 import React from 'react';
-import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
+import ProtectedRoute from './components/ProtectedRoute';
+import AdminRoute from './components/AdminRoute';
+
+// --- Import Your Page Components ---
 import LoginPage from './pages/LoginPage';
 import SignupPage from './pages/SignupPage';
-import DashboardPage from './pages/DashboardPage';
-import ProtectedRoute from './components/ProtectedRoute';
-import PositionSizerPage from './pages/PositionSizerPage';
-import PaperTradePage from './pages/PaperTradePage';
-import PortfolioPage from './pages/PortfolioPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import ResetPasswordPage from './pages/ResetPasswordPage'; 
+import PaperTradePage from './pages/PaperTradePage';
+import PositionSizerPage from './pages/PositionSizerPage';
+import CurrencyConverterPage from './pages/CurrencyConverterPage';
+import RiskManagementPage from './pages/RiskManagementPage';
+import AdminPage from './pages/AdminPage';
+import ActionHandlerPage from './pages/ActionHandlerPage'; // Make sure this is imported
 import ProfilePage from './pages/ProfilePage';
 import ChangePasswordPage from './pages/ChangePasswordPage';
-import ActionHandlerPage from './pages/ActionHandlerPage'; // <-- Import the new page
 
 function App() {
   return (
@@ -22,15 +27,22 @@ function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignupPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-          <Route path="/action" element={<ActionHandlerPage />} /> {/* <-- Add the new route */}
           
-          {/* Protected Routes */}
-          <Route path="/" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
+          {/* --- THIS IS THE CRUCIAL FIX --- */}
+          {/* The /action route MUST point to ActionHandlerPage */}
+          <Route path="/action" element={<ActionHandlerPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
+
+          {/* Private User Routes */}
+          <Route path="/" element={<ProtectedRoute><PaperTradePage /></ProtectedRoute>} />
           <Route path="/position-sizer" element={<ProtectedRoute><PositionSizerPage /></ProtectedRoute>} />
-          <Route path="/paper-trade" element={<ProtectedRoute><PaperTradePage /></ProtectedRoute>} />
-          <Route path="/portfolio" element={<ProtectedRoute><PortfolioPage /></ProtectedRoute>} />
           <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
           <Route path="/change-password" element={<ProtectedRoute><ChangePasswordPage /></ProtectedRoute>} />
+          <Route path="/currency-converter" element={<ProtectedRoute><CurrencyConverterPage /></ProtectedRoute>} />
+          <Route path="/risk-management" element={<ProtectedRoute><RiskManagementPage /></ProtectedRoute>} />
+          
+          {/* Admin Route */}
+          <Route path="/admin" element={<AdminRoute><AdminPage /></AdminRoute>} />
         </Routes>
       </AuthProvider>
     </Router>
