@@ -8,6 +8,18 @@ import toast from 'react-hot-toast';
 const EditIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L15.232 5.232z" /></svg>;
 const DeleteIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>;
 
+// --- Number Formatting Helper ---
+const formatCurrency = (number) => {
+    if (isNaN(number)) return number;
+    return new Intl.NumberFormat('en-IN', {
+        style: 'currency',
+        currency: 'INR',
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    }).format(number);
+};
+
+
 // --- Combined Pagination and Footer Component ---
 const TableControls = ({ totalItems, itemsPerPage, setItemsPerPage, currentPage, setCurrentPage }) => {
     const totalPages = Math.ceil(totalItems / itemsPerPage);
@@ -153,7 +165,6 @@ const WinRateGauge = ({ winPercentage = 0 }) => {
 
 const PaperTradePage = () => {
     const { currentUser } = useAuth();
-    // Add brokerage to initial form state
     const [formData, setFormData] = useState({ symbol: '', quantity: '', price: '', type: 'BUY', remarks: '', brokerage: '' });
     const [openPositions, setOpenPositions] = useState([]);
     const [closedTrades, setClosedTrades] = useState([]);
@@ -188,7 +199,6 @@ const PaperTradePage = () => {
         const wins = closedTrades.filter(trade => trade.pnl > 0).length;
         const losses = totalTrades - wins;
         const winPercentage = totalTrades > 0 ? (wins / totalTrades) * 100 : 0;
-        // P&L is already calculated net of brokerage, so this remains correct
         const totalPnl = closedTrades.reduce((acc, trade) => acc + (trade.pnl || 0), 0);
         return { totalTrades, wins, losses, winPercentage, totalPnl };
     }, [closedTrades]);
@@ -243,11 +253,10 @@ const PaperTradePage = () => {
                 entryPrice: Number(formData.price),
                 type: formData.type,
                 remarks: formData.remarks,
-                brokerage: Number(formData.brokerage) || 0, // Save brokerage
+                brokerage: Number(formData.brokerage) || 0,
                 status: 'OPEN',
                 entryDate: new Date(),
             });
-            // Reset form including brokerage
             setFormData({ symbol: '', quantity: '', price: '', type: 'BUY', remarks: '', brokerage: '' });
             toast.success("Trade placed successfully!");
         } catch (err) {
@@ -261,10 +270,9 @@ const PaperTradePage = () => {
             return toast.error("Please enter a valid positive exit price.");
         }
         const tradeToClose = openPositions.find(p => p.id === tradeId);
-        const brokerage = tradeToClose.brokerage || 0; // Get brokerage from the trade
+        const brokerage = tradeToClose.brokerage || 0;
         let pnl;
 
-        // Calculate P&L considering brokerage
         if (tradeToClose.type === 'BUY') {
             pnl = ((Number(exitPrice) - tradeToClose.entryPrice) * tradeToClose.quantity) - brokerage;
         } else {
@@ -276,7 +284,7 @@ const PaperTradePage = () => {
                 status: 'CLOSED',
                 exitPrice: Number(exitPrice),
                 exitDate: new Date(),
-                pnl: pnl // Save the net P&L
+                pnl: pnl
             });
             setExitPrices(prev => { const newPrices = {...prev}; delete newPrices[tradeId]; return newPrices; });
             toast.success("Trade closed successfully!");
@@ -305,7 +313,7 @@ const PaperTradePage = () => {
                 symbol: editingTrade.symbol.toUpperCase(),
                 quantity: Number(editingTrade.quantity),
                 entryPrice: Number(editingTrade.entryPrice),
-                brokerage: Number(editingTrade.brokerage) || 0, // Update brokerage
+                brokerage: Number(editingTrade.brokerage) || 0,
                 remarks: editingTrade.remarks
             });
             toast.success("Trade updated successfully!");
@@ -353,7 +361,7 @@ const PaperTradePage = () => {
                         </div>
                         <div className="col-span-2 lg:col-span-3 flex flex-col items-center bg-primary p-4 rounded-lg">
                             <span className={`text-4xl font-bold ${tradeStats.totalPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                {tradeStats.totalPnl >= 0 ? '+' : ''}₹{tradeStats.totalPnl.toFixed(2)}
+                                {tradeStats.totalPnl >= 0 ? '+' : ''}{formatCurrency(tradeStats.totalPnl)}
                             </span>
                             <span className="text-text-secondary mt-1">Total Net P&L</span>
                         </div>
@@ -363,7 +371,6 @@ const PaperTradePage = () => {
 
             <div className="bg-primary-light p-6 rounded-lg shadow-lg mb-8 border border-gray-700">
                 <h2 className="text-xl font-semibold text-text-primary mb-4">Enter a New Trade</h2>
-                {/* Updated form grid layout */}
                 <form onSubmit={handleNewTrade} className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 items-end">
                     <select name="type" value={formData.type} onChange={handleChange} className="p-3 bg-primary rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-secondary transition text-white">
                         <option value="BUY">BUY</option>
@@ -372,10 +379,8 @@ const PaperTradePage = () => {
                     <input name="symbol" value={formData.symbol} onChange={handleChange} placeholder="Symbol (e.g., RELIANCE)" className="p-3 bg-primary rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-secondary transition" />
                     <input name="quantity" type="number" value={formData.quantity} onChange={handleChange} placeholder="Quantity" className="p-3 bg-primary rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-secondary transition" />
                     <input name="price" type="number" step="any" value={formData.price} onChange={handleChange} placeholder="Entry Price" className="p-3 bg-primary rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-secondary transition" />
-                    {/* New Brokerage Input */}
                     <input name="brokerage" type="number" step="any" value={formData.brokerage} onChange={handleChange} placeholder="Brokerage & Taxes" className="p-3 bg-primary rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-secondary transition" />
                     <input name="remarks" value={formData.remarks} onChange={handleChange} placeholder="Remarks" className="p-3 bg-primary rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-secondary transition" />
-                    {/* Updated button span */}
                     <button type="submit" className="md:col-span-3 lg:col-span-6 bg-secondary hover:bg-secondary-dark text-white font-bold py-3 px-4 rounded-lg transition duration-300 w-full">Place Order</button>
                 </form>
             </div>
@@ -405,8 +410,8 @@ const PaperTradePage = () => {
                                             <td className="p-3 font-bold">{pos.symbol}</td>
                                             <td className={`p-3 font-bold ${pos.type === 'BUY' ? 'text-green-400' : 'text-red-400'}`}>{pos.type}</td>
                                             <td className="p-3">{pos.quantity}</td>
-                                            <td className="p-3">₹{(pos.entryPrice || 0).toFixed(2)}</td>
-                                            <td className="p-3">₹{(pos.brokerage || 0).toFixed(2)}</td>
+                                            <td className="p-3">{formatCurrency(pos.entryPrice)}</td>
+                                            <td className="p-3">{formatCurrency(pos.brokerage)}</td>
                                             <td className="p-3 text-text-secondary">{formatDateTime(pos.entryDate)}</td>
                                             <td className="p-3">{pos.remarks}</td>
                                             <td className="p-3">
@@ -432,8 +437,8 @@ const PaperTradePage = () => {
                                         </div>
                                         <div className="text-sm space-y-1">
                                             <p><strong>Quantity:</strong> {pos.quantity}</p>
-                                            <p><strong>Entry Price:</strong> ₹{(pos.entryPrice || 0).toFixed(2)}</p>
-                                            <p><strong>Brokerage:</strong> ₹{(pos.brokerage || 0).toFixed(2)}</p>
+                                            <p><strong>Entry Price:</strong> {formatCurrency(pos.entryPrice)}</p>
+                                            <p><strong>Brokerage:</strong> {formatCurrency(pos.brokerage)}</p>
                                             <p><strong>Remarks:</strong> {pos.remarks || 'N/A'}</p>
                                             <div className="flex items-center space-x-2 pt-2">
                                                 <input type="number" step="any" placeholder="Exit Price" value={exitPrices[pos.id] || ''} onChange={(e) => handleExitPriceChange(pos.id, e.target.value)} className="p-2 bg-primary-light rounded-md w-full focus:outline-none focus:ring-2 focus:ring-secondary transition" />
@@ -477,10 +482,10 @@ const PaperTradePage = () => {
                                         <tr key={trade.id} className="border-b border-gray-700 hover:bg-primary transition">
                                             <td className="p-3 font-bold">{trade.symbol}</td>
                                             <td className={`p-3 font-bold ${trade.type === 'BUY' ? 'text-green-400' : 'text-red-400'}`}>{trade.type}</td>
-                                            <td className={`p-3 font-bold ${trade.pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>{trade.pnl >= 0 ? '+' : ''}₹{(trade.pnl || 0).toFixed(2)}</td>
-                                            <td className="p-3">₹{(trade.entryPrice || 0).toFixed(2)}</td>
-                                            <td className="p-3">₹{(trade.exitPrice || 0).toFixed(2)}</td>
-                                            <td className="p-3">₹{(trade.brokerage || 0).toFixed(2)}</td>
+                                            <td className={`p-3 font-bold ${trade.pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>{trade.pnl >= 0 ? '+' : ''}{formatCurrency(trade.pnl)}</td>
+                                            <td className="p-3">{formatCurrency(trade.entryPrice)}</td>
+                                            <td className="p-3">{formatCurrency(trade.exitPrice)}</td>
+                                            <td className="p-3">{formatCurrency(trade.brokerage)}</td>
                                             <td className="p-3 text-text-secondary">{formatDateTime(trade.exitDate)}</td>
                                             <td className="p-3">{trade.remarks}</td>
                                             <td className="p-3">
@@ -495,12 +500,12 @@ const PaperTradePage = () => {
                                     <div key={trade.id} className="bg-primary p-4 rounded-lg border border-gray-700">
                                         <div className="flex justify-between items-center mb-2">
                                             <span className="font-bold text-lg">{trade.symbol}</span>
-                                            <span className={`font-bold ${trade.pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>{trade.pnl >= 0 ? '+' : ''}₹{(trade.pnl || 0).toFixed(2)}</span>
+                                            <span className={`font-bold ${trade.pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>{trade.pnl >= 0 ? '+' : ''}{formatCurrency(trade.pnl)}</span>
                                         </div>
                                         <div className="text-sm space-y-1 text-text-secondary">
                                             <p><strong>Type:</strong> <span className={`font-bold ${trade.type === 'BUY' ? 'text-green-400' : 'text-red-400'}`}>{trade.type}</span></p>
-                                            <p><strong>Entry:</strong> ₹{(trade.entryPrice || 0).toFixed(2)} | <strong>Exit:</strong> ₹{(trade.exitPrice || 0).toFixed(2)}</p>
-                                            <p><strong>Brokerage:</strong> ₹{(trade.brokerage || 0).toFixed(2)}</p>
+                                            <p><strong>Entry:</strong> {formatCurrency(trade.entryPrice)} | <strong>Exit:</strong> {formatCurrency(trade.exitPrice)}</p>
+                                            <p><strong>Brokerage:</strong> {formatCurrency(trade.brokerage)}</p>
                                             <p><strong>Exited on:</strong> {formatDateTime(trade.exitDate)}</p>
                                             <p><strong>Remarks:</strong> {trade.remarks || 'N/A'}</p>
                                         </div>

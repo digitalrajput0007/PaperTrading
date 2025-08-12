@@ -3,8 +3,16 @@ import { db } from '../firebase';
 import { collection, getDocs } from 'firebase/firestore';
 import toast from 'react-hot-toast';
 
-// --- SVG Icon for Export Button ---
-const ExportIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>;
+// --- Number Formatting Helper ---
+const formatCurrency = (number) => {
+    if (isNaN(number)) return number;
+    return new Intl.NumberFormat('en-IN', {
+        style: 'currency',
+        currency: 'INR',
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    }).format(number);
+};
 
 // --- Reusable Pagination Component ---
 const TableControls = ({ totalItems, itemsPerPage, setItemsPerPage, currentPage, setCurrentPage }) => {
@@ -84,127 +92,110 @@ const TableControls = ({ totalItems, itemsPerPage, setItemsPerPage, currentPage,
     );
 };
 
-
-const AdminPage = () => {
-    const [users, setUsers] = useState([]);
+const RankingPage = () => {
+    const [rankedUsers, setRankedUsers] = useState([]);
     const [loading, setLoading] = useState(true);
-    
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(10);
 
     const paginatedUsers = useMemo(() => {
         const startIndex = (currentPage - 1) * itemsPerPage;
-        return users.slice(startIndex, startIndex + itemsPerPage);
-    }, [users, currentPage, itemsPerPage]);
+        return rankedUsers.slice(startIndex, startIndex + itemsPerPage);
+    }, [rankedUsers, currentPage, itemsPerPage]);
 
     useEffect(() => {
-        const fetchUsers = async () => {
+        const fetchUsersAndStats = async () => {
             try {
-                const usersCollectionRef = collection(db, 'users');
-                const querySnapshot = await getDocs(usersCollectionRef);
-                const usersList = querySnapshot.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data()
+                const usersSnapshot = await getDocs(collection(db, 'users'));
+                const allUsersList = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                
+                const usersList = allUsersList.filter(user => user.role !== 'admin');
+
+                const usersWithStats = await Promise.all(usersList.map(async (user) => {
+                    const tradesRef = collection(db, 'users', user.id, 'trades');
+                    const tradesSnapshot = await getDocs(tradesRef);
+                    const trades = tradesSnapshot.docs.map(d => d.data());
+
+                    const openTrades = trades.filter(t => t.status === 'OPEN').length;
+                    const closedTrades = trades.filter(t => t.status === 'CLOSED');
+                    const totalPnl = closedTrades.reduce((acc, trade) => acc + (trade.pnl || 0), 0);
+                    
+                    let avgTradesPerDay = 0;
+                    if (trades.length > 0 && trades[0].entryDate) {
+                        const firstTradeDate = trades.reduce((earliest, trade) => 
+                            trade.entryDate.seconds < earliest.seconds ? trade.entryDate : earliest
+                        , trades[0].entryDate).seconds * 1000;
+                        
+                        const daysSinceFirstTrade = Math.max(1, (new Date().getTime() - firstTradeDate) / (1000 * 3600 * 24));
+                        avgTradesPerDay = trades.length / daysSinceFirstTrade;
+                    }
+
+                    return { 
+                        ...user, 
+                        totalPnl, 
+                        openTrades, 
+                        closedTrades: closedTrades.length, 
+                        avgTradesPerDay: avgTradesPerDay.toFixed(2) 
+                    };
                 }));
 
-                usersList.sort((a, b) => {
-                    if (a.role === 'admin' && b.role !== 'admin') return -1;
-                    if (a.role !== 'admin' && b.role === 'admin') return 1;
-                    return 0;
-                });
+                usersWithStats.sort((a, b) => b.totalPnl - a.totalPnl);
+                
+                const finalRankedList = usersWithStats.map((user, index) => ({
+                    ...user,
+                    rank: index + 1
+                }));
 
-                setUsers(usersList);
+                setRankedUsers(finalRankedList);
+
             } catch (error) {
-                console.error("Error fetching users:", error);
-                toast.error("Failed to fetch user data.");
+                console.error("Error fetching user rankings:", error);
+                toast.error("Failed to fetch user rankings.");
             } finally {
                 setLoading(false);
             }
         };
 
-        fetchUsers();
+        fetchUsersAndStats();
     }, []);
-
-    const formatDate = (timestamp) => {
-        if (timestamp && timestamp.seconds) {
-            return new Date(timestamp.seconds * 1000).toLocaleDateString('en-IN');
-        }
-        return 'N/A';
-    };
-
-    const handleExport = () => {
-        if (typeof window.XLSX === 'undefined') {
-            toast.error("Excel export library is not available.");
-            return;
-        }
-
-        const dataToExport = users.map(user => ({
-            'Name': `${user.firstName} ${user.lastName}`,
-            'Email': user.email,
-            'Mobile': user.mobile || 'N/A',
-            'Gender': user.gender || 'N/A',
-            'Role': user.role || 'user',
-            'Created At': formatDate(user.createdAt),
-        }));
-
-        const ws = window.XLSX.utils.json_to_sheet(dataToExport);
-        const wb = window.XLSX.utils.book_new();
-        window.XLSX.utils.book_append_sheet(wb, ws, "Users");
-        window.XLSX.writeFile(wb, "TradeDash_Users.xlsx");
-    };
 
     return (
         <div className="p-4 md:p-6">
-            <div className="flex justify-end items-center mb-8">
-                <button 
-                    onClick={handleExport} 
-                    className="flex items-center bg-secondary hover:bg-secondary-dark text-white font-bold py-2 px-4 rounded-lg transition"
-                    disabled={loading || users.length === 0}
-                >
-                    <ExportIcon />
-                    Export to Excel
-                </button>
-            </div>
-
+            <h1 className="text-3xl font-bold text-text-primary mb-8">User Rankings</h1>
             <div className="bg-primary-light p-6 rounded-lg shadow-lg border border-gray-700">
                 <div className="overflow-x-auto">
                     {loading ? (
-                        <p className="text-center text-text-secondary">Loading users...</p>
+                        <p className="text-center text-text-secondary">Calculating rankings...</p>
                     ) : (
                         <>
                             <table className="min-w-full text-sm">
                                 <thead className="border-b border-gray-700 text-text-secondary">
                                     <tr>
+                                        <th className="text-left p-3 font-semibold">Rank</th>
                                         <th className="text-left p-3 font-semibold">Name</th>
-                                        <th className="text-left p-3 font-semibold">Email</th>
-                                        <th className="text-left p-3 font-semibold">Mobile</th>
-                                        <th className="text-left p-3 font-semibold">Gender</th>
-                                        <th className="text-left p-3 font-semibold">Role</th>
-                                        <th className="text-left p-3 font-semibold">Created At</th>
+                                        <th className="text-left p-3 font-semibold">Total P&L</th>
+                                        <th className="text-center p-3 font-semibold">Open Trades</th>
+                                        <th className="text-center p-3 font-semibold">Closed Trades</th>
+                                        <th className="text-center p-3 font-semibold">Avg. Trades/Day</th>
                                     </tr>
                                 </thead>
                                 <tbody className="text-text-primary">
                                     {paginatedUsers.map(user => (
-                                        <tr 
-                                            key={user.id} 
-                                            className="border-b border-gray-700 hover:bg-primary transition"
-                                        >
+                                        <tr key={user.id} className="border-b border-gray-700 hover:bg-primary transition">
+                                            <td className="p-3 font-bold text-secondary">{user.rank}</td>
                                             <td className="p-3">{user.firstName} {user.lastName}</td>
-                                            <td className="p-3">{user.email}</td>
-                                            <td className="p-3">{user.mobile || 'N/A'}</td>
-                                            <td className="p-3">{user.gender || 'N/A'}</td>
-                                            <td className="p-3">
-                                                <span className={`px-2 py-1 rounded-full text-xs font-bold ${user.role === 'admin' ? 'bg-secondary text-white' : 'bg-gray-600 text-text-secondary'}`}>
-                                                    {user.role || 'user'}
-                                                </span>
+                                            <td className={`p-3 font-bold ${user.totalPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                                {formatCurrency(user.totalPnl)}
                                             </td>
-                                            <td className="p-3">{formatDate(user.createdAt)}</td>
+                                            <td className="p-3 text-center">{user.openTrades}</td>
+                                            <td className="p-3 text-center">{user.closedTrades}</td>
+                                            <td className="p-3 text-center">{user.avgTradesPerDay}</td>
                                         </tr>
                                     ))}
                                 </tbody>
                             </table>
-                             <TableControls 
-                                totalItems={users.length} 
+                            <TableControls 
+                                totalItems={rankedUsers.length} 
                                 itemsPerPage={itemsPerPage} 
                                 setItemsPerPage={setItemsPerPage} 
                                 currentPage={currentPage} 
@@ -218,4 +209,4 @@ const AdminPage = () => {
     );
 };
 
-export default AdminPage;
+export default RankingPage;

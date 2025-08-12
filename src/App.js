@@ -14,9 +14,10 @@ import PositionSizerPage from './pages/PositionSizerPage';
 import CurrencyConverterPage from './pages/CurrencyConverterPage';
 import RiskManagementPage from './pages/RiskManagementPage';
 import AdminPage from './pages/AdminPage';
-import ActionHandlerPage from './pages/ActionHandlerPage'; // Make sure this is imported
+import ActionHandlerPage from './pages/ActionHandlerPage';
 import ProfilePage from './pages/ProfilePage';
 import ChangePasswordPage from './pages/ChangePasswordPage';
+import RankingPage from './pages/RankingPage'; // <-- Import the new RankingPage
 
 function App() {
   return (
@@ -28,8 +29,7 @@ function App() {
           <Route path="/signup" element={<SignupPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           
-          {/* --- THIS IS THE CRUCIAL FIX --- */}
-          {/* The /action route MUST point to ActionHandlerPage */}
+          {/* Action Handler Routes */}
           <Route path="/action" element={<ActionHandlerPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
 
@@ -41,8 +41,11 @@ function App() {
           <Route path="/currency-converter" element={<ProtectedRoute><CurrencyConverterPage /></ProtectedRoute>} />
           <Route path="/risk-management" element={<ProtectedRoute><RiskManagementPage /></ProtectedRoute>} />
           
-          {/* Admin Route */}
+          {/* Admin Routes */}
           <Route path="/admin" element={<AdminRoute><AdminPage /></AdminRoute>} />
+          {/* --- ADD THIS NEW ROUTE FOR RANKING --- */}
+          <Route path="/ranking" element={<AdminRoute><RankingPage /></AdminRoute>} />
+
         </Routes>
       </AuthProvider>
     </Router>
