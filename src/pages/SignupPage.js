@@ -102,7 +102,13 @@ const SignupPage = () => {
                     <input type="email" name="email" placeholder="Email Address" value={formData.email} onChange={handleChange} className="w-full p-3 bg-primary rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary transition text-text-primary" required />
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <input type="tel" name="mobile" placeholder="Mobile Number" value={formData.mobile} onChange={handleChange} className="w-full p-3 bg-primary rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary transition text-text-primary" />
-                        <select name="gender" value={formData.gender} onChange={handleChange} className="w-full p-3 bg-primary rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary transition text-text-primary" required>
+                        <select 
+                            name="gender" 
+                            value={formData.gender} 
+                            onChange={handleChange} 
+                            className={`w-full p-3 bg-primary rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary transition ${formData.gender ? 'text-text-primary' : 'text-gray-500'}`} 
+                            required
+                        >
                             <option value="" disabled>Select Gender</option>
                             <option value="Male">Male</option>
                             <option value="Female">Female</option>
