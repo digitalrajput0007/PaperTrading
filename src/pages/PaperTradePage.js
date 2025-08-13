@@ -8,6 +8,19 @@ import toast from 'react-hot-toast';
 const EditIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L15.232 5.232z" /></svg>;
 const DeleteIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>;
 
+// --- Sorting Icons ---
+const SortIcon = ({ direction }) => (
+    <svg className="w-4 h-4 ml-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        {direction === 'asc' ? (
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+        ) : direction === 'desc' ? (
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        ) : (
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
+        )}
+    </svg>
+);
+
 // --- Number Formatting Helper ---
 const formatCurrency = (number) => {
     if (isNaN(number)) return number;
@@ -18,7 +31,6 @@ const formatCurrency = (number) => {
         maximumFractionDigits: 2,
     }).format(number);
 };
-
 
 // --- Combined Pagination and Footer Component ---
 const TableControls = ({ totalItems, itemsPerPage, setItemsPerPage, currentPage, setCurrentPage }) => {
@@ -162,7 +174,6 @@ const WinRateGauge = ({ winPercentage = 0 }) => {
     );
 };
 
-
 const PaperTradePage = () => {
     const { currentUser } = useAuth();
     const [formData, setFormData] = useState({ symbol: '', quantity: '', price: '', type: 'BUY', remarks: '', brokerage: '' });
@@ -183,6 +194,65 @@ const PaperTradePage = () => {
     const [closedCurrentPage, setClosedCurrentPage] = useState(1);
     const [closedItemsPerPage, setClosedItemsPerPage] = useState(10);
 
+    // --- State for Sorting (Trade History only) ---
+    const [sortConfig, setSortConfig] = useState({ key: null, direction: null });
+
+    // --- Sorting Function ---
+    const handleSort = (key) => {
+        let direction = 'asc';
+        if (sortConfig.key === key && sortConfig.direction === 'asc') {
+            direction = 'desc';
+        } else if (sortConfig.key === key && sortConfig.direction === 'desc') {
+            direction = null;
+            key = null;
+        }
+        setSortConfig({ key, direction });
+        setClosedCurrentPage(1); // Reset to first page when sorting
+    };
+
+    // --- Sorted Closed Trades ---
+    const sortedClosedTrades = useMemo(() => {
+        if (!sortConfig.key || !sortConfig.direction) {
+            return closedTrades;
+        }
+
+        return [...closedTrades].sort((a, b) => {
+            let aValue = a[sortConfig.key];
+            let bValue = b[sortConfig.key];
+
+            // Handle special cases for different data types
+            switch (sortConfig.key) {
+                case 'symbol':
+                case 'type':
+                    aValue = aValue?.toString().toLowerCase() || '';
+                    bValue = bValue?.toString().toLowerCase() || '';
+                    break;
+                case 'pnl':
+                case 'entryPrice':
+                case 'exitPrice':
+                case 'brokerage':
+                    aValue = Number(aValue) || 0;
+                    bValue = Number(bValue) || 0;
+                    break;
+                case 'exitDate':
+                    // Handle Firestore timestamps
+                    aValue = aValue?.seconds ? aValue.seconds : (aValue instanceof Date ? aValue.getTime() : 0);
+                    bValue = bValue?.seconds ? bValue.seconds : (bValue instanceof Date ? bValue.getTime() : 0);
+                    break;
+                default:
+                    break;
+            }
+
+            if (aValue < bValue) {
+                return sortConfig.direction === 'asc' ? -1 : 1;
+            }
+            if (aValue > bValue) {
+                return sortConfig.direction === 'asc' ? 1 : -1;
+            }
+            return 0;
+        });
+    }, [closedTrades, sortConfig]);
+
     // --- Memoized Paginated Data ---
     const paginatedOpenPositions = useMemo(() => {
         const startIndex = (openCurrentPage - 1) * openItemsPerPage;
@@ -191,8 +261,8 @@ const PaperTradePage = () => {
 
     const paginatedClosedTrades = useMemo(() => {
         const startIndex = (closedCurrentPage - 1) * closedItemsPerPage;
-        return closedTrades.slice(startIndex, startIndex + closedItemsPerPage);
-    }, [closedTrades, closedCurrentPage, closedItemsPerPage]);
+        return sortedClosedTrades.slice(startIndex, startIndex + closedItemsPerPage);
+    }, [sortedClosedTrades, closedCurrentPage, closedItemsPerPage]);
 
     const tradeStats = useMemo(() => {
         const totalTrades = closedTrades.length;
@@ -334,6 +404,19 @@ const PaperTradePage = () => {
         setIsDeleteModalOpen(true);
     };
 
+    // --- Sortable Header Component ---
+    const SortableHeader = ({ sortKey, children, className = "" }) => (
+        <th 
+            className={`text-left p-3 font-semibold cursor-pointer hover:bg-gray-600 transition-colors ${className}`}
+            onClick={() => handleSort(sortKey)}
+        >
+            <div className="flex items-center">
+                {children}
+                <SortIcon direction={sortConfig.key === sortKey ? sortConfig.direction : null} />
+            </div>
+        </th>
+    );
+
     return (
         <div className="p-4 md:p-6">
             <h1 className="text-3xl font-bold text-text-primary mb-8 md:hidden">Dashboard</h1>
@@ -466,13 +549,13 @@ const PaperTradePage = () => {
                             <table className="min-w-full text-sm hidden md:table">
                                 <thead className="border-b border-gray-700 text-text-secondary">
                                     <tr>
-                                        <th className="text-left p-3 font-semibold">Symbol</th>
-                                        <th className="text-left p-3 font-semibold">Type</th>
-                                        <th className="text-left p-3 font-semibold">Net P/L</th>
-                                        <th className="text-left p-3 font-semibold">Entry Price</th>
-                                        <th className="text-left p-3 font-semibold">Exit Price</th>
-                                        <th className="text-left p-3 font-semibold">Brokerage</th>
-                                        <th className="text-left p-3 font-semibold">Exit Date & Time</th>
+                                        <SortableHeader sortKey="symbol">Symbol</SortableHeader>
+                                        <SortableHeader sortKey="type">Type</SortableHeader>
+                                        <SortableHeader sortKey="pnl">Net P/L</SortableHeader>
+                                        <SortableHeader sortKey="entryPrice">Entry Price</SortableHeader>
+                                        <SortableHeader sortKey="exitPrice">Exit Price</SortableHeader>
+                                        <SortableHeader sortKey="brokerage">Brokerage</SortableHeader>
+                                        <SortableHeader sortKey="exitDate">Exit Date & Time</SortableHeader>
                                         <th className="text-left p-3 font-semibold">Remarks</th>
                                         <th className="text-left p-3 font-semibold">Action</th>
                                     </tr>
@@ -515,7 +598,7 @@ const PaperTradePage = () => {
                                     </div>
                                 ))}
                             </div>
-                            <TableControls totalItems={closedTrades.length} itemsPerPage={closedItemsPerPage} setItemsPerPage={setClosedItemsPerPage} currentPage={closedCurrentPage} setCurrentPage={setClosedCurrentPage} />
+                            <TableControls totalItems={sortedClosedTrades.length} itemsPerPage={closedItemsPerPage} setItemsPerPage={setClosedItemsPerPage} currentPage={closedCurrentPage} setCurrentPage={setClosedCurrentPage} />
                         </>
                     ) : <p className="text-text-secondary">No closed trades yet.</p>}
                 </div>
