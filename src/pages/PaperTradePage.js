@@ -194,9 +194,19 @@ const PaperTradePage = () => {
     const [closedCurrentPage, setClosedCurrentPage] = useState(1);
     const [closedItemsPerPage, setClosedItemsPerPage] = useState(10);
 
-    // --- State for Sorting and Searching (Trade History only) ---
+    // --- State for Sorting and Filtering ---
     const [sortConfig, setSortConfig] = useState({ key: null, direction: null });
     const [searchTerm, setSearchTerm] = useState('');
+    const [filterSymbol, setFilterSymbol] = useState('all');
+    const [filterType, setFilterType] = useState('all');
+    const [startDate, setStartDate] = useState('');
+    const [endDate, setEndDate] = useState('');
+
+    // --- Unique Symbols for Dropdown ---
+    const uniqueSymbols = useMemo(() => {
+        const symbols = closedTrades.map(trade => trade.symbol);
+        return ['all', ...new Set(symbols)];
+    }, [closedTrades]);
 
     // --- Sorting Function ---
     const handleSort = (key) => {
@@ -208,20 +218,54 @@ const PaperTradePage = () => {
             key = null;
         }
         setSortConfig({ key, direction });
-        setClosedCurrentPage(1); // Reset to first page when sorting
+        setClosedCurrentPage(1);
+    };
+    
+    // --- Clear Filters Function ---
+    const clearFilters = () => {
+        setSearchTerm('');
+        setFilterSymbol('all');
+        setFilterType('all');
+        setStartDate('');
+        setEndDate('');
     };
 
     // --- Filtered and Sorted Closed Trades ---
-    const filteredAndSortedClosedTrades = useMemo(() => {
-        let processedTrades = closedTrades.filter(trade => {
-            const term = searchTerm.toLowerCase();
-            const symbolMatch = trade.symbol?.toLowerCase().includes(term);
-            const remarksMatch = trade.remarks?.toLowerCase().includes(term);
-            return symbolMatch || remarksMatch;
-        });
+    const processedClosedTrades = useMemo(() => {
+        let filtered = [...closedTrades];
 
+        // Search filter (Symbol and Remarks)
+        if (searchTerm) {
+            const term = searchTerm.toLowerCase();
+            filtered = filtered.filter(trade =>
+                trade.symbol?.toLowerCase().includes(term) ||
+                trade.remarks?.toLowerCase().includes(term)
+            );
+        }
+
+        // Symbol filter
+        if (filterSymbol !== 'all') {
+             filtered = filtered.filter(trade => trade.symbol === filterSymbol);
+        }
+
+        // Type filter
+        if (filterType !== 'all') {
+            filtered = filtered.filter(trade => trade.type === filterType);
+        }
+
+        // Date range filter
+        if (startDate && endDate) {
+            const start = new Date(startDate).setHours(0, 0, 0, 0);
+            const end = new Date(endDate).setHours(23, 59, 59, 999);
+            filtered = filtered.filter(trade => {
+                const exitDate = trade.exitDate?.toDate().getTime();
+                return exitDate >= start && exitDate <= end;
+            });
+        }
+
+        // Sorting
         if (sortConfig.key && sortConfig.direction) {
-            processedTrades.sort((a, b) => {
+            filtered.sort((a, b) => {
                 let aValue = a[sortConfig.key];
                 let bValue = b[sortConfig.key];
 
@@ -252,8 +296,8 @@ const PaperTradePage = () => {
             });
         }
 
-        return processedTrades;
-    }, [closedTrades, sortConfig, searchTerm]);
+        return filtered;
+    }, [closedTrades, searchTerm, filterSymbol, filterType, startDate, endDate, sortConfig]);
 
     // --- Memoized Paginated Data ---
     const paginatedOpenPositions = useMemo(() => {
@@ -263,17 +307,18 @@ const PaperTradePage = () => {
 
     const paginatedClosedTrades = useMemo(() => {
         const startIndex = (closedCurrentPage - 1) * closedItemsPerPage;
-        return filteredAndSortedClosedTrades.slice(startIndex, startIndex + closedItemsPerPage);
-    }, [filteredAndSortedClosedTrades, closedCurrentPage, closedItemsPerPage]);
+        return processedClosedTrades.slice(startIndex, startIndex + closedItemsPerPage);
+    }, [processedClosedTrades, closedCurrentPage, closedItemsPerPage]);
 
     const tradeStats = useMemo(() => {
-        const totalTrades = closedTrades.length;
-        const wins = closedTrades.filter(trade => trade.pnl > 0).length;
+        const tradesToAnalyze = processedClosedTrades; // Use filtered trades for stats
+        const totalTrades = tradesToAnalyze.length;
+        const wins = tradesToAnalyze.filter(trade => trade.pnl > 0).length;
         const losses = totalTrades - wins;
         const winPercentage = totalTrades > 0 ? (wins / totalTrades) * 100 : 0;
-        const totalPnl = closedTrades.reduce((acc, trade) => acc + (trade.pnl || 0), 0);
+        const totalPnl = tradesToAnalyze.reduce((acc, trade) => acc + (trade.pnl || 0), 0);
         return { totalTrades, wins, losses, winPercentage, totalPnl };
-    }, [closedTrades]);
+    }, [processedClosedTrades]);
 
     useEffect(() => {
         if (!currentUser) return;
@@ -544,18 +589,36 @@ const PaperTradePage = () => {
             </div>
 
             <div className="bg-primary-light p-6 rounded-lg shadow-lg mb-8 border border-gray-700">
-                <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-xl font-semibold text-text-primary">Trade History</h2>
+                <h2 className="text-xl font-semibold text-text-primary mb-4">Trade History</h2>
+                <div className="flex flex-col md:flex-row justify-between items-center mb-4 space-y-4 md:space-y-0">
                     <input
                         type="text"
                         placeholder="Search by Symbol or Remarks..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="p-2 bg-primary rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary transition text-sm w-1/3"
+                        className="p-2 bg-primary rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary transition text-sm w-full md:w-1/3"
                     />
+                     <div className="flex flex-wrap items-center gap-2">
+                        <select value={filterSymbol} onChange={e => setFilterSymbol(e.target.value)} className="p-2 bg-primary rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary transition text-sm">
+                            <option value="all">All Symbols</option>
+                            {uniqueSymbols.map(symbol => symbol !== 'all' && <option key={symbol} value={symbol}>{symbol}</option>)}
+                        </select>
+                        <select value={filterType} onChange={e => setFilterType(e.target.value)} className="p-2 bg-primary rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary transition text-sm">
+                            <option value="all">All Types</option>
+                            <option value="BUY">BUY</option>
+                            <option value="SELL">SELL</option>
+                        </select>
+                        <div className="flex items-center gap-2 bg-primary p-2 rounded-lg">
+                            <span className="text-sm">From:</span>
+                            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="bg-transparent focus:outline-none text-sm" />
+                             <span className="text-sm">To:</span>
+                            <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="bg-transparent focus:outline-none text-sm" />
+                        </div>
+                        <button onClick={clearFilters} className="p-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition text-sm">Clear</button>
+                    </div>
                 </div>
                 <div className="overflow-x-auto">
-                    {loading ? <p className="text-text-secondary">Loading...</p> : filteredAndSortedClosedTrades.length > 0 ? (
+                    {loading ? <p className="text-text-secondary">Loading...</p> : processedClosedTrades.length > 0 ? (
                         <>
                             <table className="min-w-full text-sm hidden md:table">
                                 <thead className="border-b border-gray-700 text-text-secondary">
@@ -609,9 +672,9 @@ const PaperTradePage = () => {
                                     </div>
                                 ))}
                             </div>
-                            <TableControls totalItems={filteredAndSortedClosedTrades.length} itemsPerPage={closedItemsPerPage} setItemsPerPage={setClosedItemsPerPage} currentPage={closedCurrentPage} setCurrentPage={setClosedCurrentPage} />
+                            <TableControls totalItems={processedClosedTrades.length} itemsPerPage={closedItemsPerPage} setItemsPerPage={setClosedItemsPerPage} currentPage={closedCurrentPage} setCurrentPage={setClosedCurrentPage} />
                         </>
-                    ) : <p className="text-text-secondary text-center py-4">No closed trades yet.</p>}
+                    ) : <p className="text-text-secondary text-center py-4">No trades match your search.</p>}
                 </div>
             </div>
 
