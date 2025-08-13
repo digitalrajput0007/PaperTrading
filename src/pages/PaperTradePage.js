@@ -194,8 +194,9 @@ const PaperTradePage = () => {
     const [closedCurrentPage, setClosedCurrentPage] = useState(1);
     const [closedItemsPerPage, setClosedItemsPerPage] = useState(10);
 
-    // --- State for Sorting (Trade History only) ---
+    // --- State for Sorting and Searching (Trade History only) ---
     const [sortConfig, setSortConfig] = useState({ key: null, direction: null });
+    const [searchTerm, setSearchTerm] = useState('');
 
     // --- Sorting Function ---
     const handleSort = (key) => {
@@ -210,48 +211,49 @@ const PaperTradePage = () => {
         setClosedCurrentPage(1); // Reset to first page when sorting
     };
 
-    // --- Sorted Closed Trades ---
-    const sortedClosedTrades = useMemo(() => {
-        if (!sortConfig.key || !sortConfig.direction) {
-            return closedTrades;
+    // --- Filtered and Sorted Closed Trades ---
+    const filteredAndSortedClosedTrades = useMemo(() => {
+        let processedTrades = closedTrades.filter(trade => {
+            const term = searchTerm.toLowerCase();
+            const symbolMatch = trade.symbol?.toLowerCase().includes(term);
+            const remarksMatch = trade.remarks?.toLowerCase().includes(term);
+            return symbolMatch || remarksMatch;
+        });
+
+        if (sortConfig.key && sortConfig.direction) {
+            processedTrades.sort((a, b) => {
+                let aValue = a[sortConfig.key];
+                let bValue = b[sortConfig.key];
+
+                switch (sortConfig.key) {
+                    case 'symbol':
+                    case 'type':
+                        aValue = aValue?.toString().toLowerCase() || '';
+                        bValue = bValue?.toString().toLowerCase() || '';
+                        break;
+                    case 'pnl':
+                    case 'entryPrice':
+                    case 'exitPrice':
+                    case 'brokerage':
+                        aValue = Number(aValue) || 0;
+                        bValue = Number(bValue) || 0;
+                        break;
+                    case 'exitDate':
+                        aValue = aValue?.seconds ? aValue.seconds : (aValue instanceof Date ? aValue.getTime() : 0);
+                        bValue = bValue?.seconds ? bValue.seconds : (bValue instanceof Date ? bValue.getTime() : 0);
+                        break;
+                    default:
+                        break;
+                }
+
+                if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
+                if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
+                return 0;
+            });
         }
 
-        return [...closedTrades].sort((a, b) => {
-            let aValue = a[sortConfig.key];
-            let bValue = b[sortConfig.key];
-
-            // Handle special cases for different data types
-            switch (sortConfig.key) {
-                case 'symbol':
-                case 'type':
-                    aValue = aValue?.toString().toLowerCase() || '';
-                    bValue = bValue?.toString().toLowerCase() || '';
-                    break;
-                case 'pnl':
-                case 'entryPrice':
-                case 'exitPrice':
-                case 'brokerage':
-                    aValue = Number(aValue) || 0;
-                    bValue = Number(bValue) || 0;
-                    break;
-                case 'exitDate':
-                    // Handle Firestore timestamps
-                    aValue = aValue?.seconds ? aValue.seconds : (aValue instanceof Date ? aValue.getTime() : 0);
-                    bValue = bValue?.seconds ? bValue.seconds : (bValue instanceof Date ? bValue.getTime() : 0);
-                    break;
-                default:
-                    break;
-            }
-
-            if (aValue < bValue) {
-                return sortConfig.direction === 'asc' ? -1 : 1;
-            }
-            if (aValue > bValue) {
-                return sortConfig.direction === 'asc' ? 1 : -1;
-            }
-            return 0;
-        });
-    }, [closedTrades, sortConfig]);
+        return processedTrades;
+    }, [closedTrades, sortConfig, searchTerm]);
 
     // --- Memoized Paginated Data ---
     const paginatedOpenPositions = useMemo(() => {
@@ -261,8 +263,8 @@ const PaperTradePage = () => {
 
     const paginatedClosedTrades = useMemo(() => {
         const startIndex = (closedCurrentPage - 1) * closedItemsPerPage;
-        return sortedClosedTrades.slice(startIndex, startIndex + closedItemsPerPage);
-    }, [sortedClosedTrades, closedCurrentPage, closedItemsPerPage]);
+        return filteredAndSortedClosedTrades.slice(startIndex, startIndex + closedItemsPerPage);
+    }, [filteredAndSortedClosedTrades, closedCurrentPage, closedItemsPerPage]);
 
     const tradeStats = useMemo(() => {
         const totalTrades = closedTrades.length;
@@ -542,9 +544,18 @@ const PaperTradePage = () => {
             </div>
 
             <div className="bg-primary-light p-6 rounded-lg shadow-lg mb-8 border border-gray-700">
-                <h2 className="text-xl font-semibold text-text-primary mb-4">Trade History</h2>
+                <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-xl font-semibold text-text-primary">Trade History</h2>
+                    <input
+                        type="text"
+                        placeholder="Search by Symbol or Remarks..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="p-2 bg-primary rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary transition text-sm w-1/3"
+                    />
+                </div>
                 <div className="overflow-x-auto">
-                    {loading ? <p className="text-text-secondary">Loading...</p> : closedTrades.length > 0 ? (
+                    {loading ? <p className="text-text-secondary">Loading...</p> : filteredAndSortedClosedTrades.length > 0 ? (
                         <>
                             <table className="min-w-full text-sm hidden md:table">
                                 <thead className="border-b border-gray-700 text-text-secondary">
@@ -598,9 +609,9 @@ const PaperTradePage = () => {
                                     </div>
                                 ))}
                             </div>
-                            <TableControls totalItems={sortedClosedTrades.length} itemsPerPage={closedItemsPerPage} setItemsPerPage={setClosedItemsPerPage} currentPage={closedCurrentPage} setCurrentPage={setClosedCurrentPage} />
+                            <TableControls totalItems={filteredAndSortedClosedTrades.length} itemsPerPage={closedItemsPerPage} setItemsPerPage={setClosedItemsPerPage} currentPage={closedCurrentPage} setCurrentPage={setClosedCurrentPage} />
                         </>
-                    ) : <p className="text-text-secondary">No closed trades yet.</p>}
+                    ) : <p className="text-text-secondary text-center py-4">No closed trades yet.</p>}
                 </div>
             </div>
 
@@ -644,14 +655,14 @@ const PaperTradePage = () => {
             {/* --- Delete Confirmation Modal --- */}
             {isDeleteModalOpen && (
                  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-                       <div className="bg-primary-light rounded-lg p-8 w-full max-w-md">
-                           <h2 className="text-xl font-bold mb-4">Confirm Deletion</h2>
-                           <p>Are you sure you want to permanently delete this trade? This action cannot be undone.</p>
-                           <div className="flex justify-end space-x-4 mt-6">
-                                <button type="button" onClick={() => setIsDeleteModalOpen(false)} className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded">Cancel</button>
-                                <button type="button" onClick={handleDeleteTrade} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">Delete</button>
-                           </div>
-                       </div>
+                     <div className="bg-primary-light rounded-lg p-8 w-full max-w-md">
+                         <h2 className="text-xl font-bold mb-4">Confirm Deletion</h2>
+                         <p>Are you sure you want to permanently delete this trade? This action cannot be undone.</p>
+                         <div className="flex justify-end space-x-4 mt-6">
+                             <button type="button" onClick={() => setIsDeleteModalOpen(false)} className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded">Cancel</button>
+                             <button type="button" onClick={handleDeleteTrade} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">Delete</button>
+                         </div>
+                     </div>
                  </div>
             )}
         </div>
