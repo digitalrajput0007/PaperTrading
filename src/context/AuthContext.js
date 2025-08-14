@@ -5,7 +5,7 @@ import {
     signInWithEmailAndPassword, 
     signOut, 
     sendEmailVerification,
-    sendPasswordResetEmail, // <-- Import this
+    sendPasswordResetEmail,
     onAuthStateChanged,
     EmailAuthProvider,
     reauthenticateWithCredential,
@@ -24,8 +24,13 @@ export function AuthProvider({ children }) {
     const [currentUser, setCurrentUser] = useState(null);
     const [userData, setUserData] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [isSigningUp, setIsSigningUp] = useState(false); // <-- Add state to prevent double submission
 
     async function signup(email, password, firstName, lastName, mobile, gender) {
+        // If a signup process is already running, do nothing.
+        if (isSigningUp) return;
+
+        setIsSigningUp(true); // <-- Set signing up state to true
         try {
             const userCredential = await createUserWithEmailAndPassword(auth, email, password);
             const actionCodeSettings = {
@@ -48,8 +53,16 @@ export function AuthProvider({ children }) {
             toast.success('Verification email sent! Please check your inbox.');
             return userCredential;
         } catch (error) {
-            toast.error(error.message || "Failed to create an account.");
+            // Check for the specific duplicate email error code
+            if (error.code === 'auth/email-already-in-use') {
+                toast.error("An account already exists with this email address.");
+            } else {
+                // Handle other potential errors generically
+                toast.error(error.message || "Failed to create an account.");
+            }
             console.error("Signup error:", error);
+        } finally {
+            setIsSigningUp(false); // <-- Reset signing up state regardless of outcome
         }
     }
 
@@ -113,10 +126,11 @@ export function AuthProvider({ children }) {
     const value = {
         currentUser,
         userData,
+        isSigningUp, // <-- Export the new state
         signup,
         login,
         logout,
-        sendPasswordReset, // <-- Export new function
+        sendPasswordReset,
         updateUserDetails,
         reauthenticate,
         updateUserPassword

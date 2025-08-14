@@ -19,10 +19,11 @@ const PasswordStrengthMeter = ({ validation }) => {
 
 const SignupPage = () => {
     const navigate = useNavigate();
-    const { signup } = useAuth();
+    // Get both signup function and isSigningUp state from the context
+    const { signup, isSigningUp } = useAuth();
     const [formData, setFormData] = useState({ firstName: '', lastName: '', email: '', mobile: '', gender: '', password: '', confirmPassword: '' });
     const [agree, setAgree] = useState(false);
-    const [loading, setLoading] = useState(false);
+    // Removed local 'loading' state, as we'll use 'isSigningUp' from the context
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [passwordValidation, setPasswordValidation] = useState({ length: false, uppercase: false, lowercase: false, number: false, specialChar: false });
@@ -53,40 +54,36 @@ const SignupPage = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        setLoading(true);
 
+        // --- Client-side validation ---
         if (!isPasswordValid) {
             toast.error("Password does not meet all the requirements.");
-            setLoading(false);
             return;
         }
         if (formData.password !== formData.confirmPassword) {
             toast.error("Passwords do not match.");
-            setLoading(false);
             return;
         }
         if (!agree) {
             toast.error("You must agree to the terms and conditions.");
-            setLoading(false);
             return;
         }
 
-        try {
-            await signup(
-                formData.email, 
-                formData.password, 
-                formData.firstName, 
-                formData.lastName,
-                formData.mobile,
-                formData.gender
-            );
-            
+        // --- Call signup from context ---
+        // The context will handle all toasts and loading states.
+        const result = await signup(
+            formData.email, 
+            formData.password, 
+            formData.firstName, 
+            formData.lastName,
+            formData.mobile,
+            formData.gender
+        );
+        
+        // The signup function returns a user credential on success.
+        // If it was successful, we navigate.
+        if (result) {
             navigate('/login');
-
-        } catch (err) {
-            console.error("Signup failed on page:", err);
-        } finally {
-            setLoading(false);
         }
     };
 
@@ -129,7 +126,8 @@ const SignupPage = () => {
                             I agree to the <button type="button" className="font-medium text-secondary hover:underline" onClick={() => toast('Terms and Conditions page is not yet implemented.')}>Terms and Conditions</button>
                         </label>
                     </div>
-                    <button type="submit" disabled={loading || !isPasswordValid} className="w-full bg-secondary hover:bg-secondary-dark text-white font-bold py-3 rounded-lg transition duration-300 disabled:bg-gray-500 disabled:cursor-not-allowed">{loading ? 'Creating Account...' : 'Sign Up'}</button>
+                    {/* Use isSigningUp from context to disable the button */}
+                    <button type="submit" disabled={isSigningUp || !isPasswordValid} className="w-full bg-secondary hover:bg-secondary-dark text-white font-bold py-3 rounded-lg transition duration-300 disabled:bg-gray-500 disabled:cursor-not-allowed">{isSigningUp ? 'Creating Account...' : 'Sign Up'}</button>
                 </form>
                 <p className="mt-6 text-center text-sm text-text-secondary">Already have an account?{' '}<Link to="/login" className="font-medium text-secondary hover:underline">Log In</Link></p>
             </div>
